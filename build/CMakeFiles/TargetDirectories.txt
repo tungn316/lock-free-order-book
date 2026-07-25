@@ -1,0 +1,5 @@
+/home/tungl/projects/lock-free-order-book/build/CMakeFiles/lob.dir
+/home/tungl/projects/lock-free-order-book/build/CMakeFiles/bench.dir
+/home/tungl/projects/lock-free-order-book/build/CMakeFiles/tests.dir
+/home/tungl/projects/lock-free-order-book/build/CMakeFiles/edit_cache.dir
+/home/tungl/projects/lock-free-order-book/build/CMakeFiles/rebuild_cache.dir
