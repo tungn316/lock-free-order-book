@@ -1,7 +1,0 @@
-# ninja log v7
-3	54	1785024675429353567	CMakeFiles/bench.dir/bench/bench_throughput.cpp.o	4a5796189821e0d5
-3	54	1785024675429807863	CMakeFiles/tests.dir/tests/test_order_book.cpp.o	d7a3b676775754ff
-2	55	1785024675428536893	CMakeFiles/lob.dir/src/order_book.cpp.o	f3bba4fb05fad651
-55	97	1785024675481273764	liblob.a	87412f6c315416ad
-97	143	1785024675523007332	bench	460c0bbee8369fae
-97	143	1785024675523195875	tests	69856b63c81bd315

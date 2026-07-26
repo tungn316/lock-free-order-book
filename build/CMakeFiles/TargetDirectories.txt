@@ -1,5 +1,0 @@
-/Users/tung/projects/lock-free-order-book/build/CMakeFiles/lob.dir
-/Users/tung/projects/lock-free-order-book/build/CMakeFiles/bench.dir
-/Users/tung/projects/lock-free-order-book/build/CMakeFiles/tests.dir
-/Users/tung/projects/lock-free-order-book/build/CMakeFiles/edit_cache.dir
-/Users/tung/projects/lock-free-order-book/build/CMakeFiles/rebuild_cache.dir
