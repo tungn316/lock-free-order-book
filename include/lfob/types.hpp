@@ -18,6 +18,6 @@ using SeqNum = std::uint64_t;
 enum class Side : std::uint8_t { Bid, Ask };
 
 // Cache line size used to pad atomics
-inline constexpr std::size_t kCacheLine = 64;
+inline constexpr size_t kCacheLine = 64;
 
 } // namespace lob

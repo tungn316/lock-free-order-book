@@ -1,7 +1,7 @@
 {
 	"InstallScripts" : 
 	[
-		"/home/tungl/projects/lock-free-order-book/build/cmake_install.cmake"
+		"/Users/tung/projects/lock-free-order-book/build/cmake_install.cmake"
 	],
 	"Parallel" : false
 }

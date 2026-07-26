@@ -1,20 +1,20 @@
 [
 {
-  "directory": "/home/tungl/projects/lock-free-order-book/build",
-  "command": "/usr/bin/c++ -I/home/tungl/projects/lock-free-order-book/include -std=gnu++23 -o CMakeFiles/lob.dir/src/order_book.cpp.o -c /home/tungl/projects/lock-free-order-book/src/order_book.cpp",
-  "file": "/home/tungl/projects/lock-free-order-book/src/order_book.cpp",
-  "output": "/home/tungl/projects/lock-free-order-book/build/CMakeFiles/lob.dir/src/order_book.cpp.o"
+  "directory": "/Users/tung/projects/lock-free-order-book/build",
+  "command": "/usr/bin/c++ -I/Users/tung/projects/lock-free-order-book/include -std=gnu++23 -arch arm64 -o CMakeFiles/lob.dir/src/order_book.cpp.o -c /Users/tung/projects/lock-free-order-book/src/order_book.cpp",
+  "file": "/Users/tung/projects/lock-free-order-book/src/order_book.cpp",
+  "output": "/Users/tung/projects/lock-free-order-book/build/CMakeFiles/lob.dir/src/order_book.cpp.o"
 },
 {
-  "directory": "/home/tungl/projects/lock-free-order-book/build",
-  "command": "/usr/bin/c++ -I/home/tungl/projects/lock-free-order-book/include -std=gnu++23 -o CMakeFiles/bench.dir/bench/bench_throughput.cpp.o -c /home/tungl/projects/lock-free-order-book/bench/bench_throughput.cpp",
-  "file": "/home/tungl/projects/lock-free-order-book/bench/bench_throughput.cpp",
-  "output": "/home/tungl/projects/lock-free-order-book/build/CMakeFiles/bench.dir/bench/bench_throughput.cpp.o"
+  "directory": "/Users/tung/projects/lock-free-order-book/build",
+  "command": "/usr/bin/c++ -I/Users/tung/projects/lock-free-order-book/include -std=gnu++23 -arch arm64 -o CMakeFiles/bench.dir/bench/bench_throughput.cpp.o -c /Users/tung/projects/lock-free-order-book/bench/bench_throughput.cpp",
+  "file": "/Users/tung/projects/lock-free-order-book/bench/bench_throughput.cpp",
+  "output": "/Users/tung/projects/lock-free-order-book/build/CMakeFiles/bench.dir/bench/bench_throughput.cpp.o"
 },
 {
-  "directory": "/home/tungl/projects/lock-free-order-book/build",
-  "command": "/usr/bin/c++ -I/home/tungl/projects/lock-free-order-book/include -std=gnu++23 -o CMakeFiles/tests.dir/tests/test_order_book.cpp.o -c /home/tungl/projects/lock-free-order-book/tests/test_order_book.cpp",
-  "file": "/home/tungl/projects/lock-free-order-book/tests/test_order_book.cpp",
-  "output": "/home/tungl/projects/lock-free-order-book/build/CMakeFiles/tests.dir/tests/test_order_book.cpp.o"
+  "directory": "/Users/tung/projects/lock-free-order-book/build",
+  "command": "/usr/bin/c++ -I/Users/tung/projects/lock-free-order-book/include -std=gnu++23 -arch arm64 -o CMakeFiles/tests.dir/tests/test_order_book.cpp.o -c /Users/tung/projects/lock-free-order-book/tests/test_order_book.cpp",
+  "file": "/Users/tung/projects/lock-free-order-book/tests/test_order_book.cpp",
+  "output": "/Users/tung/projects/lock-free-order-book/build/CMakeFiles/tests.dir/tests/test_order_book.cpp.o"
 }
 ]
