@@ -1,65 +1,96 @@
-#pragma once
-#include <atomic>
-#include <vector>
+#ifndef ORDER_BOOK_HPP_
+#define ORDER_BOOK_HPP_
+
+#include <cstddef>
+#include <unordered_map>
 #include "book_side.hpp"
-#include "object_pool.hpp"
-#include "seqlock.hpp"
-#include "spsc_queue.hpp"
+#include "execution_report.hpp"
+#include "node_arena.hpp"
 
-namespace lob {
+namespace lfob {
 
-// Fill notification emitted when two orders match.
-struct Trade {
-    OrderId maker_id;
-    OrderId taker_id;
-    Price price;
-    Quantity qty;
+// Sink for everything the book produces. Implemented by MatchingEngine.
+class ReportSink {
+ public:
+  ReportSink() = default;
+  virtual ~ReportSink() = default;
+  
+  ReportSink(const ReportSink&) = delete;
+  ReportSink(ReportSink&&) = delete;
+
+  ReportSink& operator=(const ReportSink&) = delete;
+  ReportSink& operator=(ReportSink&&) = delete;
+
+  virtual void Emit(const ExecutionReport& report) = 0;
 };
 
-// Inbound event from the feed/gateway thread.
-struct OrderEvent {
-    enum class Type : std::uint8_t { New, Cancel };
-    Type type;
-    OrderId id;
-    Side side;
-    Price price;
-    Quantity qty;
-};
-
+// Single-threaded limit order book.
+// No atomics, no mutexes, no runtime allocation. Every link is a
+// 32-bit index into arena_.
 class OrderBook {
-public:
-    OrderBook(Price min_price, Price max_price, std::size_t max_orders);
+ public:
+  OrderBook(const OrderBook&) = delete;
+  OrderBook& operator=(const OrderBook&) = delete;
+  OrderBook(OrderBook&&) = delete;
+  OrderBook& operator=(OrderBook&&) = delete;
 
-    // --- Producer thread (feed/gateway) ---
-    // Enqueue an event; returns false on backpressure.
-    bool submit(const OrderEvent& event);
+  OrderBook(Price min_price,
+            Price max_price,
+            std::size_t max_orders,
+            ReportSink& sink);
+  ~OrderBook() = default;
 
-    // --- Matching thread (single consumer) ---
-    // Drain the ingress queue and apply events; returns events processed.
-    std::size_t poll();
+  // Sole entry point; matching thread only.
+  void Apply(const OrderCommand& cmd) noexcept;
 
-    // --- Any reader thread ---
-    // Lock-free consistent top-of-book snapshot via seqlock.
-    Bbo bbo() const;
+  Price BestBid() const noexcept;
+  Price BestAsk() const noexcept;
+  bool Empty() const noexcept;
 
-private:
-    // Match an incoming order against the opposite side, then rest
-    // any remainder. Appends fills to trades_out_.
-    void handle_new(const OrderEvent& event);
+ private:
+  void HandleNew(const OrderCommand& cmd) noexcept;
+  void HandleCancel(const OrderCommand& cmd) noexcept;
+  void HandleReplace(const OrderCommand& cmd) noexcept;
 
-    // O(1) cancel via the id->order index.
-    void handle_cancel(OrderId id);
+  // Sweep the crossing side; returns unfilled remainder.
+  Quantity Match(Side taker_side,
+                 Price limit,
+                 Quantity qty,
+                 const OrderCommand& cmd) noexcept;
 
-    // Recompute and publish the BBO snapshot after any top-of-book change.
-    void publish_bbo();
+  // Dry-run pass for FOK: can `qty` fill at `limit` without trading?
+  bool Fillable(Side taker_side, Price limit, Quantity qty) const noexcept;
 
-    BookSide bids_;
-    BookSide asks_;
-    ObjectPool<Order> order_pool_;         // hot-path allocation
-    std::vector<Order*> order_index_;      // OrderId -> Order* for O(1) cancel
-    SpscQueue<OrderEvent, 1 << 16> ingress_; // feed -> matcher handoff
-    SpscQueue<Trade, 1 << 16> trades_out_;   // matcher -> publisher handoff
-    Seqlock<Bbo> bbo_;                     // lock-free BBO for readers
+  void Rest(const OrderCommand& cmd, Quantity leaves) noexcept;
+  void Unlink(NodeIdx node) noexcept;  // remove + release to arena
+
+  void EmitFill(const Order& maker,
+                 const OrderCommand& taker,
+                 Price price,
+                 Quantity qty) noexcept;
+  void EmitAck(const OrderCommand& cmd,
+                ExecutionReport::Type type,
+                Quantity leaves) noexcept;
+  void EmitReject(const OrderCommand& cmd,
+                   ExecutionReport::RejectReason reason) noexcept;
+  void MaybeEmitTopOfBook() noexcept;
+
+  BookSide m_bids;
+  BookSide m_asks;
+  NodeArena m_arena;
+
+  // OrderId -> NodeRef. Generation in the ref makes a stale cancel a
+  // clean UnknownOrder reject instead of a wrong-order cancel.
+  std::unordered_map<OrderId, NodeRef> m_index;
+
+  ReportSink& m_sink;
+  SeqNum m_seq;
+  Price m_last_bid;
+  Price m_last_ask;
+  Quantity m_last_bid_qty;
+  Quantity m_last_ask_qty;
 };
 
-} // namespace lob
+}  // namespace lfob
+
+#endif // ORDER_BOOK_HPP_

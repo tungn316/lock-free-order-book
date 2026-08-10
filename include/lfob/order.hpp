@@ -1,18 +1,26 @@
-#pragma once
+#ifndef ORDER_HPP_
+#define ORDER_HPP_
 #include "types.hpp"
 
-namespace lob {
+namespace lfob {
 
-// A resting order. Doubly-linked so cancellation is O(1) once the
-// order is located via the id->order index.
+// A resting order node living inside NodeArena's flat vector.
+// Links are NodeIdx, not pointers: 32-bit, relocation-safe, and the
+// whole node fits comfortably inside one cache line.
 struct Order {
-    OrderId id;          // exchange-assigned unique id
-    Price price;         // limit price in ticks
-    Quantity remaining;       // unfilled quantity
-    Side side;           // Bid or Ask
-    Order* prev;         // previous order at the same price level (FIFO)
-    Order* next;         // next order at the same price level (FIFO)
-    void* level;         // back-pointer to owning PriceLevel for O(1) cancel
+  OrderId id;
+  Price price;
+  Quantity remaining;
+  NodeIdx prev;  // FIFO neighbours within the price level
+  NodeIdx next;
+  std::uint32_t level_idx;  // owning level's tick index, for O(1) cancel
+  ClientId client;
+  Side side;
+  TimeInForce tif;
 };
 
-} // namespace lob
+static_assert(std::is_trivially_copyable_v<Order>);
+
+}  // namespace lfob
+
+#endif // ORDER_HPP_

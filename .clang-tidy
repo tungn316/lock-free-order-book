@@ -1,0 +1,123 @@
+---
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  clang-diagnostic-*,
+  cppcoreguidelines-*,
+  hicpp-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -hicpp-braces-around-statements,
+  -hicpp-use-auto,
+  -hicpp-explicit-conversions,
+  -hicpp-vararg,
+  -hicpp-avoid-goto,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -misc-use-anonymous-namespace,
+  -misc-include-cleaner,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-suspicious-include,
+  -modernize-use-auto,
+  -modernize-use-trailing-return-type,
+  -modernize-use-default-member-init,
+  -performance-no-int-to-ptr,
+  -portability-restrict-system-includes,
+  -readability-else-after-return,
+  -readability-static-accessed-through-instance,
+  -readability-identifier-length,
+  -readability-redundant-string-init,
+  -readability-use-anyofallof,
+  -readability-magic-numbers,
+
+WarningsAsErrors: "*"
+HeaderFilterRegex: ".*"
+FormatStyle: Chromium
+
+CheckOptions:
+  # ── Cognitive complexity ───────────────────────────────────────────────────
+  readability-function-cognitive-complexity.DescribeBasicIncrements: "true"
+  readability-function-cognitive-complexity.IgnoreMacros: "true"
+  readability-function-cognitive-complexity.Threshold: "25"
+
+  # ── Function size ──────────────────────────────────────────────────────────
+  readability-function-size.LineThreshold: "80"
+  readability-function-size.ParameterThreshold: "6"
+  readability-function-size.NestingThreshold: "4"
+  readability-function-size.BranchThreshold: "10"
+
+  # ── Magic numbers ──────────────────────────────────────────────────────────
+  readability-magic-numbers.IgnoredIntegerValues: "1;2;3;4;10;48"
+  readability-magic-numbers.IgnorePowersOf2IntegerValues: "true"
+  readability-magic-numbers.IgnoreBitFieldsWidths: "true"
+  readability-magic-numbers.IgnoredFloatingPointValues: "1.0;100.0"
+
+  # ── Naming conventions ─────────────────────────────────────────────────────
+  readability-identifier-naming.AbstractClassCase: CamelCase
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: UPPER_CASE
+  readability-identifier-naming.NamespaceCase: lower_case
+  readability-identifier-naming.TemplateParameterCase: UPPER_CASE
+
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.ClassMethodCase: CamelCase
+  readability-identifier-naming.IgnoreMainLikeFunctions: "true"
+
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.LocalVariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
+  readability-identifier-naming.MemberCase: lower_case
+  readability-identifier-naming.ClassMemberCase: lower_case
+  readability-identifier-naming.PrivateMemberCase: lower_case
+  readability-identifier-naming.PrivateMemberPrefix: "m_"
+  readability-identifier-naming.ProtectedMemberPrefix: "m_"
+
+  readability-identifier-naming.ConstantCase: lower_case
+  readability-identifier-naming.ClassConstantCase: lower_case
+  readability-identifier-naming.ClassConstantPrefix: "k_"
+  readability-identifier-naming.ConstantMemberCase: lower_case
+  readability-identifier-naming.GlobalConstantCase: lower_case
+  readability-identifier-naming.GlobalConstantPrefix: "k_"
+  readability-identifier-naming.StaticConstantCase: lower_case
+  readability-identifier-naming.StaticConstantPrefix: "k_"
+  readability-identifier-naming.ConstexprVariableCase: lower_case
+  readability-identifier-naming.ConstexprVariablePrefix: "k_"
+
+  readability-identifier-naming.GlobalVariableCase: lower_case
+  readability-identifier-naming.GlobalVariablePrefix: "g_"
+  readability-identifier-naming.StaticVariableCase: lower_case
+  readability-identifier-naming.StaticVariablePrefix: "g_"
+
+  # ── Performance ────────────────────────────────────────────────────────────
+  performance-move-const-arg.CheckTriviallyCopyableMove: "true"
+  performance-unnecessary-value-param.AllowedTypes: ""
+
+  # ── Bugprone ───────────────────────────────────────────────────────────────
+  bugprone-argument-comment.StrictMode: "true"
+  bugprone-assert-side-effect.AssertMacros: assert
+  bugprone-misplaced-widening-cast.CheckImplicitCasts: "true"
+  bugprone-sizeof-expression.WarnOnSizeOfIntegerExpression: "true"
+  bugprone-string-constructor.LargeLengthThreshold: "8388608"
+
+  # ── cppcoreguidelines ──────────────────────────────────────────────────────
+  cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: "true"
+  cppcoreguidelines-special-member-functions.AllowMissingMoveFunctions: "false"
+  cppcoreguidelines-narrowing-conversions.WarnOnFloatingPointNarrowingConversion: "true"
+  cppcoreguidelines-narrowing-conversions.WarnOnEquivalentBitWidth: "true"
+
+  # ── Modernize ──────────────────────────────────────────────────────────────
+  modernize-loop-convert.MinConfidence: reasonable
+  modernize-pass-by-value.IncludeStyle: google
+...

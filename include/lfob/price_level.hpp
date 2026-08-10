@@ -1,28 +1,38 @@
-#pragma once
-#include "order.hpp"
+#ifndef PRICE_LEVEL_HPP_
+#define PRICE_LEVEL_HPP_
 
-namespace lob {
+#include <cstddef>
+#include "node_arena.hpp"
+#include "types.hpp"
 
-// All orders resting at a single price, in time priority (FIFO).
-// Only ever mutated by the single matching thread, so it's a plain
-// intrusive doubly-linked list — no atomics needed here.
+namespace lfob {
+
+// Orders resting at one price in time priority. Holds only indices;
+// the arena is passed in so the level itself stays 40-ish bytes and
+// packs densely inside BookSide's dense level array.
 class PriceLevel {
-public:
-    explicit PriceLevel(Price price);
+ public:
+  PriceLevel();
 
-    void push_back(Order* order);   // add at back (time priority)
-    void remove(Order* order);      // O(1) unlink for cancels
-    Order* front() const;           // oldest order (match target)
+  void PushBack(NodeArena& arena, NodeIdx node);
+  void Remove(NodeArena& arena, NodeIdx node);
 
-    Price price() const;
-    Quantity total_qty() const;          // aggregate size, for depth queries
-    bool empty() const;
+  [[nodiscard]] NodeIdx Front() const noexcept;  // kNullNode when empty
+  void PopFront(NodeArena& arena);
 
-private:
-    Price price_;
-    Quantity total_qty_;   // maintained incrementally on add/remove/fill
-    Order* head_;     // oldest order
-    Order* tail_;     // newest order
+  void ReduceQty(Quantity delta) noexcept;
+
+  [[nodiscard]] Quantity TotalQty() const noexcept;
+  [[nodiscard]] std::size_t OrderCount() const noexcept;
+  [[nodiscard]] bool Empty() const noexcept;
+
+ private:
+  Quantity m_total_qty;
+  std::uint32_t m_order_count;
+  NodeIdx m_head;
+  NodeIdx m_tail;
 };
 
-} // namespace lob
+}  // namespace lfob
+
+#endif // PRICE_LEVEL_HPP_

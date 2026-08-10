@@ -1,36 +1,43 @@
-#pragma once
-#include <cstddef>
+#ifndef BOOK_SIDE_HPP_
+#define BOOK_SIDE_HPP_
+
+#include <cstdint>
 #include <vector>
 #include "price_level.hpp"
 
-namespace lob {
+namespace lfob {
 
-// One side of the book. Price levels stored in a dense array indexed
-// by tick offset from a base price — O(1) level lookup, cache-friendly,
-// no tree rebalancing. A bitmap accelerates finding the next non-empty
-// level after the best level is exhausted.
 class BookSide {
-public:
-    BookSide(Side side, Price min_price, Price max_price);
+ public:
+  BookSide(Side side, Price min_price, Price max_price);
 
-    // Get (or lazily create) the level for a price.
-    PriceLevel& level_at(Price price);
+  PriceLevel& LevelAt(Price price) noexcept;
+  PriceLevel& LevelAtIndex(std::uint32_t idx) noexcept;
 
-    // Best price currently resting on this side; nullptr if empty.
-    PriceLevel* best();
+  PriceLevel* Best() noexcept;
+  [[nodiscard]] const PriceLevel* Best() const noexcept;
+  [[nodiscard]] Price BestPrice() const noexcept;
 
-    // Called after best() empties to advance the cached best index
-    // via the occupancy bitmap.
-    void on_level_emptied(Price price);
+  void MarkOccupied(Price price) noexcept;
+  void OnLevelEmptied(std::uint32_t idx) noexcept;
 
-    bool empty() const;
+  [[nodiscard]] bool Crosses(Price price) const noexcept;
+  [[nodiscard]] bool Empty() const noexcept;
+  [[nodiscard]] bool InRange(Price price) const noexcept;
 
-private:
-    Side side_;
-    Price min_price_;                 // base of the dense index
-    std::vector<PriceLevel> levels_;  // dense array of levels
-    std::vector<std::uint64_t> occupancy_; // bitmap of non-empty levels
-    std::size_t best_idx_;            // cached index of best level
+  [[nodiscard]] std::uint32_t IndexOf(Price price) const noexcept;
+  [[nodiscard]] Price PriceOf(std::uint32_t idx) const noexcept;
+
+ private:
+  void AdvanceBest() noexcept;  // bitmap scan to next live level
+
+  Side m_side;
+  Price m_min_price;
+  std::vector<PriceLevel> m_levels;
+  std::vector<std::uint64_t> m_occupancy;
+  std::uint32_t m_best_idx;
 };
 
-} // namespace lob
+}  // namespace lfob
+
+#endif // BOOK_SIDE_HPP_
