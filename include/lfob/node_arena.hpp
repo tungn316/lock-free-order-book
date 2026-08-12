@@ -2,7 +2,10 @@
 #define NODE_ARENA_HPP_
 
 #include <cstddef>
+#include <cassert>
 #include <vector>
+#include <numeric>
+#include <algorithm>
 #include "order.hpp"
 #include "types.hpp"
 
@@ -16,32 +19,104 @@ namespace lfob {
 // generation so stale NodeRefs are detectable.
 class NodeArena {
  public:
-  explicit NodeArena(std::size_t capacity);
+  explicit NodeArena(std::size_t capacity)
+  {
+      m_nodes.resize(capacity);
+      m_generations.resize(capacity, 0);
+      m_free.resize(capacity);
+      std::ranges::iota(m_free, 0);
+      std::ranges::reverse(m_free);
+  }
 
   // O(1): pop_back off free_. Returns kNullNode-tagged ref when
   // exhausted — the caller must reject the order, never grow.
-  NodeRef Acquire() noexcept;
+  NodeRef Acquire() noexcept 
+  {
+    if (m_free.empty()) {
+      return {.idx = k_null_node, .gen = 0};
+    }
+    const NodeIdx idx = m_free.back();
+    m_free.pop_back();
+    return {.idx = idx, .gen = GenAt(idx)};
+  }
 
   // O(1): bump generation, push index onto free_.
-  void Release(NodeIdx idx) noexcept;
+  void Release(NodeIdx idx) noexcept
+  {
+    assert(idx < m_nodes.size());
+    m_free.push_back(idx);
+    ++GenAt(idx);
+  }
 
-  // Unchecked access. Hot path; the matcher has already validated.
-  Order& operator[](NodeIdx idx) noexcept;
-  const Order& operator[](NodeIdx idx) const noexcept;
+   // Unchecked access. Hot path; the matcher has already validated.
+   Order& operator[](NodeIdx idx) noexcept { return NodeAt(idx); }
+   const Order& operator[](NodeIdx idx) const noexcept { return NodeAt(idx); }
+
+  // Same as operator[], but named so call sites don't trip the
+  // unchecked-subscript lint. Invariant: idx came off m_free.
+  [[nodiscard]] Order& Node(NodeIdx idx) noexcept { return NodeAt(idx); }
+  [[nodiscard]] const Order& Node(NodeIdx idx) const noexcept {
+    return NodeAt(idx);
+  }
 
   // Checked access: nullptr if idx is stale or out of range.
-  Order* Resolve(NodeRef ref) noexcept;
+  Order* Resolve(NodeRef ref) noexcept 
+  {
+    if (ref.idx >= m_generations.size()) {
+      return nullptr;
+    }
+    if (ref.gen == GenAt(ref.idx)) {
+      return &NodeAt(ref.idx);
+    }
+    return nullptr;
+  }
 
-  [[nodiscard]] Generation GenerationOf(NodeIdx idx) const noexcept;
+  [[nodiscard]] Generation GenerationOf(NodeIdx idx) const noexcept
+  {
+    return GenAt(idx);
+  }
 
-  [[nodiscard]] std::size_t Capacity() const noexcept;
-  [[nodiscard]] std::size_t InUse() const noexcept;
-  [[nodiscard]] bool Exhausted() const noexcept;
+  [[nodiscard]] std::size_t Capacity() const noexcept
+  {
+      return (m_nodes.size());
+  }
+  [[nodiscard]] std::size_t InUse() const noexcept
+  {
+    return m_nodes.size() - m_free.size();
+  }
+  [[nodiscard]] bool Exhausted() const noexcept
+  {
+    return m_free.empty();
+  }
 
  private:
   std::vector<Order> m_nodes;
   std::vector<Generation> m_generations;
-  std::vector<NodeIdx> m_free;  // stack; back() is the next allocation
+  std::vector<NodeIdx> m_free;
+
+  // ── unchecked accessors ────────────────────────────────────────────────
+  // Every raw index into the parallel vectors funnels through here. The
+  // arena's own invariant guarantees idx is in range (it came off m_free),
+  // so the bounds check is deliberately skipped. Suppression lives in ONE
+  // place instead of being scattered across the class.
+
+  [[nodiscard]] Order& NodeAt(NodeIdx idx) noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return m_nodes[idx];
+  }
+  [[nodiscard]] const Order& NodeAt(NodeIdx idx) const noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return m_nodes[idx];
+  }
+  [[nodiscard]] Generation& GenAt(NodeIdx idx) noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return m_generations[idx];
+  }
+  [[nodiscard]] Generation GenAt(NodeIdx idx) const noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return m_generations[idx];
+  }
+
 };
 
 }  // namespace lfob

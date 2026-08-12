@@ -30,7 +30,7 @@ class SpmcRing {
   static_assert(std::is_trivially_copyable_v<T>);
 
  public:
-  SpmcRing()
+  SpmcRing() noexcept
   {
     for (auto i{0UZ}; i < CAPACITY; ++i) {
         m_buffer[i].ready.store(static_cast<SeqNum>(i), std::memory_order::relaxed);

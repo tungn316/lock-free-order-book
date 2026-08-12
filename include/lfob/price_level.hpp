@@ -12,25 +12,63 @@ namespace lfob {
 // packs densely inside BookSide's dense level array.
 class PriceLevel {
  public:
-  PriceLevel();
 
-  void PushBack(NodeArena& arena, NodeIdx node);
-  void Remove(NodeArena& arena, NodeIdx node);
+  void PushBack(NodeArena& arena, NodeIdx node)
+  {
+      Order& order = arena.Node(node);
+      order.next = k_null_node;
+      order.prev = m_tail;
 
-  [[nodiscard]] NodeIdx Front() const noexcept;  // kNullNode when empty
-  void PopFront(NodeArena& arena);
+      if (m_tail != k_null_node) {
+          arena.Node(m_tail).next = node;
+      } else {
+          m_head = node;
+      }
+      m_tail = node;
 
-  void ReduceQty(Quantity delta) noexcept;
+      m_total_quantity += order.remaining;
+      ++m_order_count;
+  }
 
-  [[nodiscard]] Quantity TotalQty() const noexcept;
-  [[nodiscard]] std::size_t OrderCount() const noexcept;
-  [[nodiscard]] bool Empty() const noexcept;
+  void Remove(NodeArena& arena, NodeIdx node)
+  {
+      Order& order= arena.Node(node);
+
+      if (order.prev != k_null_node) {
+          arena.Node(order.prev).next = order.next;
+      } else {
+          m_head = order.next;
+      }
+
+      if (order.next != k_null_node) {
+          arena.Node(order.next).prev = order.prev;
+      } else {
+          m_tail = order.prev;
+      }
+
+      order.prev = k_null_node;
+      order.next = k_null_node;
+
+      m_total_quantity -= order.remaining;
+      --m_order_count;
+  }
+
+  [[nodiscard]] NodeIdx Front() const noexcept { return m_head; }
+
+  void PopFront(NodeArena& arena)
+  {
+      Remove(arena, m_head);
+  }
+
+  [[nodiscard]] Quantity TotalQuantity() const noexcept { return m_total_quantity; }
+  [[nodiscard]] std::size_t OrderCount() const noexcept { return m_order_count; }
+  [[nodiscard]] bool Empty() const noexcept { return m_order_count == 0; }
 
  private:
-  Quantity m_total_qty;
-  std::uint32_t m_order_count;
-  NodeIdx m_head;
-  NodeIdx m_tail;
+  Quantity m_total_quantity{0};
+  std::uint32_t m_order_count{0};
+  NodeIdx m_head{k_null_node};
+  NodeIdx m_tail{k_null_node};
 };
 
 }  // namespace lfob

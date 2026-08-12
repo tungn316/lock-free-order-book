@@ -38,17 +38,6 @@ set_target_properties(lfob PROPERTIES
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-# add_executable(tests
-#     tests/test_seqlock.cpp
-#     tests/test_spmc_ring.cpp
-#     tests/test_mpsc_ring.cpp
-# )
-# target_link_libraries(tests PRIVATE lfob Catch2::Catch2WithMain Threads::Threads)
-
-# list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
-# include(CTest)
-# include(Catch)
-# catch_discover_tests(tests DISCOVERY_MODE PRE_TEST)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(CTest)
 include(Catch)
@@ -66,6 +55,8 @@ endfunction()
 add_lfob_test(test_seqlock)
 add_lfob_test(test_spmc_ring)
 add_lfob_test(test_mpsc_ring)
+add_lfob_test(test_node_arena)
+add_lfob_test(test_price_level)
 
 # ── clang-format target ───────────────────────────────────────────────────────
 file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS
