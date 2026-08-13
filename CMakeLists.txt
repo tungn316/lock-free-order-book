@@ -57,6 +57,7 @@ add_lfob_test(test_spmc_ring)
 add_lfob_test(test_mpsc_ring)
 add_lfob_test(test_node_arena)
 add_lfob_test(test_price_level)
+add_lfob_test(test_book_side)
 
 # ── clang-format target ───────────────────────────────────────────────────────
 file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS

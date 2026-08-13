@@ -8,13 +8,13 @@
 
 namespace lfob {
 
-using Price     = std::int64_t;
-using Quantity  = std::uint64_t;
-using OrderId   = std::uint64_t;
-using SeqNum    = std::uint64_t;
-using ClientId  = std::uint32_t;
+using Price = std::uint64_t;
+using Quantity = std::uint64_t;
+using OrderId = std::uint64_t;
+using SeqNum = std::uint64_t;
+using ClientId = std::uint32_t;
 using Timestamp = std::uint64_t;
-using NodeIdx   = std::uint32_t;
+using NodeIdx = std::uint32_t;
 using Generation = std::uint32_t;
 
 enum class Side : std::uint8_t { BID, ASK };
@@ -23,6 +23,8 @@ enum class TimeInForce : std::uint8_t { DAY, IOC, FOK };
 // Cache line size used to pad atomics
 inline constexpr NodeIdx k_null_node = 0xFFFF'FFFFU;
 inline constexpr std::size_t k_cache_line = 64;
+
+inline constexpr std::uint32_t k_no_best = 0xFFFF'FFFFU;
 
 // Stable handle to node, generation guards against recycled slot being
 // addressed by a stale OrderID
@@ -51,4 +53,4 @@ static_assert(std::is_trivially_copyable_v<OrderCommand>);
 
 }  // namespace lfob
 
-#endif // TYPES_HPP_
+#endif  // TYPES_HPP_

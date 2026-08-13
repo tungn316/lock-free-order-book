@@ -23,4 +23,4 @@ static_assert(std::is_trivially_copyable_v<Order>);
 
 }  // namespace lfob
 
-#endif // ORDER_HPP_
+#endif  // ORDER_HPP_

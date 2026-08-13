@@ -13,4 +13,4 @@ bool Prefault(void* base, std::size_t bytes) noexcept;
 
 }  // namespace lfob
 
-#endif // AFFINITY_HPP_
+#endif  // AFFINITY_HPP_

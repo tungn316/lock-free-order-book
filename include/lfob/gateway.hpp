@@ -100,4 +100,4 @@ class Gateway {
 
 }  // namespace lfob
 
-#endif // GATEWAY_HPP_
+#endif  // GATEWAY_HPP_

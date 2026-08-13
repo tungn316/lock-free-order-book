@@ -39,8 +39,8 @@ class MatchingEngine final : public ReportSink {
   using ConsumerId = SpmcRing<ExecutionReport, k_egress_capacity>::ConsumerId;
   ConsumerId RegisterOutputWorker();
   std::size_t ReadReports(ConsumerId id,
-                           ExecutionReport* out,
-                           std::size_t max) noexcept;
+                          ExecutionReport* out,
+                          std::size_t max) noexcept;
 
   // --- Any reader thread ---
   Bbo GetBbo() const noexcept;
@@ -69,4 +69,4 @@ class MatchingEngine final : public ReportSink {
 
 }  // namespace lfob
 
-#endif // MATCHING_ENGINE_HPP_
+#endif  // MATCHING_ENGINE_HPP_

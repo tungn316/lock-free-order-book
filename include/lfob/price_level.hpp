@@ -12,56 +12,54 @@ namespace lfob {
 // packs densely inside BookSide's dense level array.
 class PriceLevel {
  public:
+  void PushBack(NodeArena& arena, NodeIdx node) {
+    Order& order = arena.Node(node);
+    order.next = k_null_node;
+    order.prev = m_tail;
 
-  void PushBack(NodeArena& arena, NodeIdx node)
-  {
-      Order& order = arena.Node(node);
-      order.next = k_null_node;
-      order.prev = m_tail;
+    if (m_tail != k_null_node) {
+      arena.Node(m_tail).next = node;
+    } else {
+      m_head = node;
+    }
+    m_tail = node;
 
-      if (m_tail != k_null_node) {
-          arena.Node(m_tail).next = node;
-      } else {
-          m_head = node;
-      }
-      m_tail = node;
-
-      m_total_quantity += order.remaining;
-      ++m_order_count;
+    m_total_quantity += order.remaining;
+    ++m_order_count;
   }
 
-  void Remove(NodeArena& arena, NodeIdx node)
-  {
-      Order& order= arena.Node(node);
+  void Remove(NodeArena& arena, NodeIdx node) {
+    Order& order = arena.Node(node);
 
-      if (order.prev != k_null_node) {
-          arena.Node(order.prev).next = order.next;
-      } else {
-          m_head = order.next;
-      }
+    if (order.prev != k_null_node) {
+      arena.Node(order.prev).next = order.next;
+    } else {
+      m_head = order.next;
+    }
 
-      if (order.next != k_null_node) {
-          arena.Node(order.next).prev = order.prev;
-      } else {
-          m_tail = order.prev;
-      }
+    if (order.next != k_null_node) {
+      arena.Node(order.next).prev = order.prev;
+    } else {
+      m_tail = order.prev;
+    }
 
-      order.prev = k_null_node;
-      order.next = k_null_node;
+    order.prev = k_null_node;
+    order.next = k_null_node;
 
-      m_total_quantity -= order.remaining;
-      --m_order_count;
+    m_total_quantity -= order.remaining;
+    --m_order_count;
   }
 
   [[nodiscard]] NodeIdx Front() const noexcept { return m_head; }
 
-  void PopFront(NodeArena& arena)
-  {
-      Remove(arena, m_head);
-  }
+  void PopFront(NodeArena& arena) { Remove(arena, m_head); }
 
-  [[nodiscard]] Quantity TotalQuantity() const noexcept { return m_total_quantity; }
-  [[nodiscard]] std::size_t OrderCount() const noexcept { return m_order_count; }
+  [[nodiscard]] Quantity TotalQuantity() const noexcept {
+    return m_total_quantity;
+  }
+  [[nodiscard]] std::size_t OrderCount() const noexcept {
+    return m_order_count;
+  }
   [[nodiscard]] bool Empty() const noexcept { return m_order_count == 0; }
 
  private:
@@ -73,4 +71,4 @@ class PriceLevel {
 
 }  // namespace lfob
 
-#endif // PRICE_LEVEL_HPP_
+#endif  // PRICE_LEVEL_HPP_

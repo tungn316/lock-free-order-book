@@ -14,7 +14,7 @@ struct ExecutionReport {
     REJECTED,
     CANCELLED,
     REPLACED,
-    FILL,       // one side of a trade
+    FILL,         // one side of a trade
     TOP_OF_BOOK,  // BBO changed
   };
 
@@ -50,4 +50,4 @@ static_assert(std::is_trivially_copyable_v<ExecutionReport>);
 
 }  // namespace lfob
 
-#endif // EXECUTION_REPORT_HPP_
+#endif  // EXECUTION_REPORT_HPP_

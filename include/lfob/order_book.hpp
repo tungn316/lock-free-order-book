@@ -14,7 +14,7 @@ class ReportSink {
  public:
   ReportSink() = default;
   virtual ~ReportSink() = default;
-  
+
   ReportSink(const ReportSink&) = delete;
   ReportSink(ReportSink&&) = delete;
 
@@ -65,14 +65,14 @@ class OrderBook {
   void Unlink(NodeIdx node) noexcept;  // remove + release to arena
 
   void EmitFill(const Order& maker,
-                 const OrderCommand& taker,
-                 Price price,
-                 Quantity qty) noexcept;
+                const OrderCommand& taker,
+                Price price,
+                Quantity qty) noexcept;
   void EmitAck(const OrderCommand& cmd,
-                ExecutionReport::Type type,
-                Quantity leaves) noexcept;
+               ExecutionReport::Type type,
+               Quantity leaves) noexcept;
   void EmitReject(const OrderCommand& cmd,
-                   ExecutionReport::RejectReason reason) noexcept;
+                  ExecutionReport::RejectReason reason) noexcept;
   void MaybeEmitTopOfBook() noexcept;
 
   BookSide m_bids;
@@ -93,4 +93,4 @@ class OrderBook {
 
 }  // namespace lfob
 
-#endif // ORDER_BOOK_HPP_
+#endif  // ORDER_BOOK_HPP_
