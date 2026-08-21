@@ -67,13 +67,22 @@ done
 [[ $have_cap -eq 0 ]] && echo "  (cpu_capacity not exported — uniform cores, any index is fine)"
 echo "using        : match_core=$MATCH_CORE bench_core=$BENCH_CORE"
 
-# ── Privilege wrappers (degrade gracefully) ───────────────────────────────────
-# SCHED_FIFO needs CAP_SYS_NICE; taskset does not. Probe chrt once.
-CHRT=(chrt -f 80)
+# ── Privilege check ────────────────────────────────────────────────────────────
+# The matching thread elevates itself to SCHED_FIFO internally (see
+# ConfigureThread() in matching_engine.cpp), which needs CAP_SYS_NICE / root.
+# We deliberately do NOT wrap the whole process in chrt here: pthreads default
+# to PTHREAD_INHERIT_SCHED, so a process-wide chrt would promote the pacer and
+# drainer threads to the same SCHED_FIFO priority as the matching thread too.
+# SCHED_FIFO does not time-slice equal-priority threads, and neither the
+# pacer's busy-wait nor the matching thread's poll loop ever yields or blocks
+# — so if two of those threads land on the same core under the taskset mask
+# below, one starves the other forever (a livelock, not a crash). Running
+# only the matching thread as SCHED_FIFO — while the pacer/drainer stay
+# SCHED_OTHER — keeps normal CFS preemption in play for them, which prevents
+# that starvation.
 if ! chrt -f 80 true 2>/dev/null; then
   echo "warning: SCHED_FIFO unavailable (need root / CAP_SYS_NICE); running SCHED_OTHER" >&2
   echo "         -> re-run with sudo for a stable tail" >&2
-  CHRT=()
 fi
 TASKSET=(taskset -c "${MATCH_CORE},${BENCH_CORE}")
 
@@ -82,7 +91,7 @@ p50s=(); p99s=(); maxs=()
 echo
 echo "== $REPS runs: samples=$SAMPLES rate=$RATE =="
 for ((i = 1; i <= REPS; i++)); do
-  out=$("${CHRT[@]}" "${TASKSET[@]}" "$BENCH" "$SAMPLES" "$RATE" "$MATCH_CORE")
+  out=$("${TASKSET[@]}" "$BENCH" "$SAMPLES" "$RATE" "$MATCH_CORE" "$BENCH_CORE")
   p50=$(awk '/^  p50 /{print $3}' <<<"$out")
   p99=$(awk '/^  p99 /{print $3}' <<<"$out")
   mx=$(awk '/^  max /{print $3}' <<<"$out")

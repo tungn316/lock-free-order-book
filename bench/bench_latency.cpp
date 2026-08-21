@@ -14,11 +14,16 @@
 // near-empty, exposing service latency rather than queueing latency. Push the
 // rate up toward the throughput ceiling to watch the tail grow.
 //
-// Usage: bench_latency [num_samples] [rate_per_sec] [cpu_core]
+// Usage: bench_latency [num_samples] [rate_per_sec] [cpu_core] [bench_core]
 //   num_samples   NEW commands to measure          (default 500'000)
 //   rate_per_sec  offered load, orders/sec         (default 500'000)
 //   cpu_core      core to pin the matching thread  (default -1 = no pin)
+//   bench_core    core to pin the submitter and drainer threads to
+//                 (default -1 = no pin). Matters under isolcpus: an
+//                 unpinned thread that happens to land on cpu_core at
+//                 creation sticks there for the whole run.
 
+#include <lfob/affinity.hpp>
 #include <lfob/clock.hpp>
 #include <lfob/execution_report.hpp>
 #include <lfob/matching_engine.hpp>
@@ -147,6 +152,17 @@ int main(int argc, char** argv) {
       ParseArg<std::size_t>(argc, argv, 1, 500'000);
   const std::uint64_t rate = ParseArg<std::uint64_t>(argc, argv, 2, 500'000);
   const int cpu_core = ParseArg<int>(argc, argv, 3, -1);
+  // Core for the submitter (this thread) and the drainer thread. Left
+  // unpinned (-1) by default, both float across whatever mask the caller
+  // (e.g. taskset) set. Under isolcpus, an unpinned thread that happens to
+  // get initially placed on cpu_core shares it with the matching thread for
+  // the rest of the run -- isolated cores are excluded from the normal
+  // load-balancing domain, so nothing ever moves it back off. Pinning here
+  // makes sure that never happens.
+  const int bench_core = ParseArg<int>(argc, argv, 4, -1);
+  if (bench_core >= 0) {
+    PinCurrentThread(bench_core);
+  }
 
   const std::size_t total = std::min(num_samples + k_warmup, k_max_orders);
   const std::size_t samples_wanted =
@@ -169,6 +185,9 @@ int main(int argc, char** argv) {
   std::vector<std::uint64_t> samples;
   samples.reserve(samples_wanted);
   std::thread drainer([&] {
+    if (bench_core >= 0) {
+      PinCurrentThread(bench_core);
+    }
     std::vector<ExecutionReport> buf(k_drain_batch);
     auto collect = [&](std::size_t got) {
       for (std::size_t i = 0; i < got; ++i) {
