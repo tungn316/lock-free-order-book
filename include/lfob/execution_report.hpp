@@ -38,12 +38,12 @@ struct ExecutionReport {
   OrderId order_id;
   OrderId counterparty_id;  // Fill only
   Price price;
-  Quantity qty;  // executed qty for Fill
-  Quantity leaves_qty;
+  Quantity quantity;  // executed qty for Fill
+  Quantity leaves_quantity;
   Price bid_price;  // TopOfBook only
-  Quantity bid_qty;
+  Quantity bid_quantity;
   Price ask_price;
-  Quantity ask_qty;
+  Quantity ask_quantity;
 };
 
 static_assert(std::is_trivially_copyable_v<ExecutionReport>);

@@ -3,205 +3,224 @@
 
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <type_traits>
 #include "types.hpp"
 
 namespace lfob {
 
-inline constexpr std::size_t k_max_consumers = 8;
+// Single Producer Multi Consumer Broadcast Ring
+//
+// Every registered consumer observes every item. The producer publishes a
+// single monotonically increasing sequence, each consumer reads with it's own cursor.
+//
+// Delivery is lossless with back-pressure. The producer may not overwrite a
+// slot until the slowest registered consumer has moved past it, so TryPush
+// fails when the ring is full.
+//
+// Consumers must be handed out via Register() before Start() / the first
+// publish
 
-// SPMC BROADCAST ring.
-//
-// Every consumer sees every message. The producer (matching thread)
-// writes slot[seq & mask] and release-stores tail_. Each consumer owns
-// a private cursor on its own cache line; the producer only reads those
-// cursors to check it is not about to overwrite unread data.
-//
-// A consumer that falls behind by more than Capacity is *dropped* (its
-// cursor is force-advanced and it is told how many it lost) rather than
-// being allowed to stall the engine. The matcher must never block on a
-// slow network thread.
-template <typename T, std::size_t CAPACITY>
+template <typename T, std::size_t CAPACITY, std::size_t MAX_CONSUMERS = 8>
 class SpmcRing {
   static_assert((CAPACITY & (CAPACITY - 1)) == 0,
                 "Capacity must be a power of two");
+  static_assert(MAX_CONSUMERS >= 1);
   static_assert(std::is_trivially_copyable_v<T>);
 
  public:
-  SpmcRing() noexcept {
-    for (auto i{0UZ}; i < CAPACITY; ++i) {
-      m_buffer[i].ready.store(static_cast<SeqNum>(i),
-                              std::memory_order::relaxed);
+  struct ConsumerId {
+    std::uint32_t idx;
+  };
+
+  SpmcRing() noexcept = default;
+  ~SpmcRing() noexcept = default;
+  SpmcRing(const SpmcRing&) = delete;
+  SpmcRing(SpmcRing&&) = delete;
+  SpmcRing& operator=(const SpmcRing&) = delete;
+  SpmcRing& operator=(SpmcRing&&) = delete;
+
+  // <---- setup: single-threaded, before Start() ---->
+
+  // Hand out an independent read cursor
+  [[nodiscard]] ConsumerId Register() noexcept {
+    const std::size_t id{m_consumer_count};
+    assert(id < MAX_CONSUMERS && "too many consumers");
+    if (id >= MAX_CONSUMERS) {
+      return ConsumerId{k_invalid_consumer};
     }
+    CursorAt(id).store(0, std::memory_order::relaxed);
+    ++m_consumer_count;
+    return ConsumerId{static_cast<std::uint32_t>(id)};
   }
 
-  // Handle a consumer uses to read; index into m_cursors.
-  using ConsumerId = std::size_t;
+  // <---- producer: matching thread only ---->
 
-  // Called once at startup, before the engine thread starts.
-  [[nodiscard]] std::optional<ConsumerId> RegisterConsumer() {
-    std::size_t tail = m_tail.load(std::memory_order::acquire);
-    ConsumerId id = m_consumer_count.fetch_add(1, std::memory_order::relaxed);
+  bool TryPush(const T& item) noexcept {
+    const SeqNum seq{m_produced.load(std::memory_order::relaxed)};
 
-    if (id >= k_max_consumers) {
-      m_consumer_count.fetch_sub(1, std::memory_order::relaxed);
-      return std::nullopt;
-    }
-
-    m_cursors[id].pos.store(tail, std::memory_order_relaxed);
-    return id;
-  }
-
-  // --- Producer: matching thread only ---
-  // Never fails, never blocks. Overwrites the oldest slot if a
-  // consumer is too slow; that consumer observes a gap.
-  void Publish(const T& item) noexcept {
-    const std::size_t count = m_consumer_count.load(std::memory_order::acquire);
-
-    // Force advance consumers that would be overwritten
-    for (auto i{0UZ}; i < count; ++i) {
-      std::size_t cur = m_cursors[i].pos.load(std::memory_order::acquire);
-      if (m_producer_pos - cur >= CAPACITY) {
-        m_cursors[i].pos.store(m_producer_pos - CAPACITY + 1,
-                               std::memory_order::release);
-        m_cursors[i].missed.fetch_add(m_producer_pos - cur - CAPACITY + 1,
-                                      std::memory_order::relaxed);
-      }
-    }
-
-    Slot& slot = m_buffer[m_producer_pos & (CAPACITY - 1)];
-    slot.payload = item;
-    slot.ready.store(static_cast<SeqNum>(m_producer_pos + 1),
-                     std::memory_order::release);
-    m_tail.store(m_producer_pos + 1, std::memory_order::release);
-    m_producer_pos++;
-  }
-
-  // Reserve a slot and write in place, avoiding a copy for large T.
-  [[nodiscard]] T& Reserve() noexcept {
-    const std::size_t count = m_consumer_count.load(std::memory_order_acquire);
-
-    for (auto i{0UZ}; i < count; ++i) {
-      std::size_t cur = m_cursors[i].pos.load(std::memory_order_acquire);
-      if (m_producer_pos - cur >= CAPACITY) {
-        m_cursors[i].pos.store(m_producer_pos - CAPACITY + 1,
-                               std::memory_order::release);
-        m_cursors[i].missed.fetch_add(m_producer_pos - cur - CAPACITY + 1,
-                                      std::memory_order::relaxed);
+    // Writing seq reuses the slot currently holding (seq - CAPACITY)
+    // The cache is <= the true min, so acting on it can only trigger
+    // a needless re-scan, never an unsafe overwrite
+    if (seq - m_gate_cache >= CAPACITY) {
+      m_gate_cache = MinCursor(seq);
+      if (seq - m_gate_cache >= CAPACITY) {
+        return false;
       }
     }
 
-    Slot& slot = m_buffer[m_producer_pos & (CAPACITY - 1)];
-    return slot.payload;
+    SlotAt(seq).payload = item;
+    // Release: publishes the payload write above to any acquiring consumer
+    m_produced.store(seq + 1, std::memory_order::release);
+    return true;
   }
 
-  void Commit() noexcept {
-    Slot& slot = m_buffer[m_producer_pos & (CAPACITY - 1)];
-    slot.ready.store(static_cast<SeqNum>(m_producer_pos + 1),
-                     std::memory_order::release);
-    m_tail.store(m_producer_pos + 1, std::memory_order::release);
-    m_producer_pos++;
-  }
-
-  // --- Consumers: each network output thread ---
-  [[nodiscard]] std::optional<T> TryRead(ConsumerId id) noexcept {
-    for (;;) {
-      std::size_t cur = m_cursors[id].pos.load(std::memory_order::acquire);
-      std::size_t tail = m_tail.load(std::memory_order::acquire);
-      if (cur >= tail) {
-        return std::nullopt;
-      }
-
-      Slot& slot = m_buffer[cur & (CAPACITY - 1)];
-      const SeqNum expected = static_cast<SeqNum>(cur + 1);
-
-      // Seqlock read of this slot.
-      SeqNum r1 = slot.ready.load(std::memory_order::acquire);
-      T item = slot.payload;
-      std::atomic_thread_fence(std::memory_order::acquire);
-      SeqNum r2 = slot.ready.load(std::memory_order::acquire);
-
-      if (r1 != r2) {
-        continue;  // torn: producer mid-write, spin
-      }
-      if (r1 != expected) {
-        // r1 > expected: lapped. Producer already force-advanced our
-        // cursor, but reload to be safe and retry with the new cur.
-        continue;  // outer loop reloads cur/tail
-      }
-
-      m_cursors[id].pos.store(cur + 1, std::memory_order::release);
-      return item;
+  std::size_t TryPushBulk(const T* items, std::size_t count) noexcept {
+    if (count == 0) {
+      return 0;
     }
-  }
+    const SeqNum seq{m_produced.load(std::memory_order::relaxed)};
 
-  // Batched read; returns count copied into out.
-  std::size_t TryReadBulk(ConsumerId id, T* out, std::size_t max) noexcept {
-    std::size_t cur = m_cursors[id].pos.load(std::memory_order::acquire);
-    std::size_t n{0};
-
-    while (n < max) {
-      std::size_t tail = m_tail.load(std::memory_order::acquire);
-      if (cur >= tail) {
-        break;
-      }
-
-      Slot& slot = m_buffer[cur & (CAPACITY - 1)];
-      const SeqNum expected = static_cast<SeqNum>(cur + 1);
-
-      // Seqlock read of this slot
-      SeqNum r1 = slot.ready.load(std::memory_order::acquire);
-      T item = slot.payload;
-      std::atomic_thread_fence(std::memory_order::acquire);
-      SeqNum r2 = slot.ready.load(std::memory_order::acquire);
-
-      if (r1 != r2) {
-        continue;  // torn: producer mid-write, spin on same cur
-      }
-      if (r1 != expected) {
-        // lapped: producer force-advanced us. Reload cursor and retry.
-        cur = m_cursors[id].pos.load(std::memory_order::acquire);
-        continue;
-      }
-
-      out[n] = item;
-      ++cur;
-      ++n;
+    // Clamp before subtracting: a stale cache can leave (used > CAPACITY)
+    std::size_t used{static_cast<std::size_t>(seq - m_gate_cache)};
+    std::size_t headroom{std::max(CAPACITY - used, 0UZ)};
+    // Only if the worst case scenario doesn't have enough space we reload m_gate_cache
+    if (count > headroom) {
+      m_gate_cache = MinCursor(seq);
+      used = static_cast<std::size_t>(seq - m_gate_cache);
+      headroom = std::max(CAPACITY - used, 0UZ);
+    }
+    if (headroom == 0) {
+        return 0;
     }
 
-    m_cursors[id].pos.store(cur, std::memory_order::release);
+    const std::size_t n{std::min(count, headroom)};
+    for (auto i{0UZ}; i < n; ++i) {
+      SlotAt(seq + i).payload = items[i];
+    }
+    // Single release store publishes the whole batch at once
+    m_produced.store(seq + n, std::memory_order::release);
     return n;
   }
 
-  // Messages this consumer missed because it fell behind. Reset on read.
-  [[nodiscard]] std::uint64_t Missed(ConsumerId id) noexcept {
-    return m_cursors[id].missed.exchange(0, std::memory_order::relaxed);
+  // <---- consumers: each id polled on its own thread ---->
+
+  std::optional<T> TryRead(ConsumerId id) noexcept {
+    const std::size_t i{id.idx};
+    assert(i < m_consumer_count);
+    const SeqNum cursor{CursorAt(i).load(std::memory_order::relaxed)};
+    // Acquire: pairs with the producer's release store, making the payload for
+    // [cursor, produced) visible before we copy it
+    const SeqNum produced{m_produced.load(std::memory_order::acquire)};
+    if (cursor == produced) {
+      return std::nullopt;
+    }
+
+    T value{SlotAt(cursor).payload};
+    // Release: our payload read above happens-before this store, so the
+    // producer will not overwrite the slot until we are done with it, paired
+    // in MinCursor
+    CursorAt(i).store(cursor + 1, std::memory_order::release);
+    return value;
   }
 
-  [[nodiscard]] std::size_t Lag(ConsumerId id) const noexcept {
-    return (m_tail.load(std::memory_order::relaxed) -
-            m_cursors[id].pos.load(std::memory_order::relaxed));
+  std::size_t TryReadBulk(ConsumerId id, T* out, std::size_t max) noexcept {
+    const std::size_t i{id.idx};
+    assert(i < m_consumer_count);
+    const SeqNum cursor{CursorAt(i).load(std::memory_order::relaxed)};
+    const SeqNum produced{m_produced.load(std::memory_order::acquire)};
+
+    std::size_t avail{static_cast<std::size_t>(produced - cursor)};
+    avail = std::min(avail, max);
+    if (avail == 0) {
+      return 0;
+    }
+
+    for (auto k{0UZ}; k < avail; ++k) {
+      out[k] = SlotAt(cursor + k).payload;
+    }
+    CursorAt(i).store(cursor + avail, std::memory_order::release);
+    return avail;
+  }
+
+  // <---- monitoring only ---->
+
+  // Backlog of a single consumer (published sequence minus its cursor).
+  [[nodiscard]] std::size_t LagOf(ConsumerId id) const noexcept {
+    const SeqNum produced{m_produced.load(std::memory_order::relaxed)};
+    const SeqNum cursor =
+        CursorAt(id.idx).load(std::memory_order::relaxed);
+    return static_cast<std::size_t>(produced - cursor);
+  }
+
+  // Backlog of the slowest consumer == how full the ring is.
+  [[nodiscard]] std::size_t SizeApprox() const noexcept {
+    const SeqNum produced{m_produced.load(std::memory_order::relaxed)};
+    return static_cast<std::size_t>(produced - MinCursor(produced));
   }
 
  private:
-  struct alignas(k_cache_line) Cursor {
-    std::atomic<std::size_t> pos{0};
-    std::atomic<std::uint64_t> missed{0};
+  // Smallest cursor across registered consumers.
+  // Acquire loads: required on the overwrite-authorizing path so a
+  // consumer's payload read happens-before the producer's reuse of that slot
+  [[nodiscard]] SeqNum MinCursor(SeqNum fallback) const noexcept {
+    if (m_consumer_count == 0) {
+      return fallback;
+    }
+    SeqNum m{CursorAt(0).load(std::memory_order::acquire)};
+    for (auto i{1UZ}; i < m_consumer_count; ++i) {
+      const SeqNum c{CursorAt(i).load(std::memory_order::acquire)};
+      m = std::min(c, m);
+    }
+    return m;
+  }
+
+  struct alignas(k_cache_line) CursorCell {
+    std::atomic<SeqNum> cursor{0};
   };
 
   struct alignas(k_cache_line) Slot {
-    std::atomic<SeqNum> ready;
-    T payload;
+    T payload{};
   };
 
-  alignas(k_cache_line) std::atomic<std::size_t> m_tail{0};
-  alignas(k_cache_line) std::size_t m_producer_pos{0};  // private to producer
-  alignas(k_cache_line) std::atomic<std::size_t> m_consumer_count{0};
+  // <---- unchecked accessors ---->
+  // Every raw index into m_buffer funnels through here. The
+  // bounds check is deliberately skipped. Suppression lives in ONE place
+  // instead of being scattered across every push/pop.
+  [[nodiscard]] Slot& SlotAt(SeqNum seq) noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)
+    return m_buffer[seq & (CAPACITY - 1)];
+  }
+  [[nodiscard]] std::atomic<SeqNum>& CursorAt(std::size_t idx) noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)
+    return m_cursors[idx].cursor;
+  }
+  [[nodiscard]] const std::atomic<SeqNum>& CursorAt(
+      std::size_t idx) const noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)
+    return m_cursors[idx].cursor;
+  }
 
-  std::array<Cursor, k_max_consumers> m_cursors;
-  alignas(k_cache_line) std::array<Slot, CAPACITY> m_buffer;
+  // Producer-write / consumer-read boundary; alone on its own line
+  alignas(k_cache_line) std::atomic<SeqNum> m_produced{0};
+
+  alignas(k_cache_line) SeqNum m_gate_cache{0};
+  std::size_t m_consumer_count{0};
+
+  // One padded cursor per consumer so no false sharing between readers or with
+  // the producer's gate scan
+  alignas(k_cache_line) std::array<CursorCell, MAX_CONSUMERS> m_cursors{};
+
+  // Padded slots so a producer store to slot k never shares a line with a
+  // consumer load from slot k-1. Storing to slot k dirties the entire cache line
+  // meaning consumers must reload the cache just to read unchanged bytes
+  //
+  // Every slot line is pulled into all N reader caches so not good so up to N dirtied caches
+  // every write
+  alignas(k_cache_line) std::array<Slot, CAPACITY> m_buffer{};
 };
 
 }  // namespace lfob

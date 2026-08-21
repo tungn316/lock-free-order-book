@@ -10,7 +10,7 @@
 
 namespace lfob {
 
-// --- Ingress ---
+// <---- Ingress ---->
 
 class Session {
  public:
@@ -49,12 +49,8 @@ class IoThread {
   std::jthread m_thread;
 };
 
-// --- Egress ---
+// <---- Egress ---->
 
-// One output worker: reads the broadcast ring, serialises, writes out.
-// Each worker owns its own cursor and its own set of destinations, so
-// two workers can serve TCP drops and UDP multicast independently from
-// the same coherent stream.
 class OutputWorker {
  public:
   enum class Transport : std::uint8_t { TCP_DROP, UDP_MULTICAST };

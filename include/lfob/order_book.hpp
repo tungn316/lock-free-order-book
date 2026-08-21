@@ -25,8 +25,8 @@ class ReportSink {
 };
 
 // Single-threaded limit order book.
-// No atomics, no mutexes, no runtime allocation. Every link is a
-// 32-bit index into arena_.
+// No atomics, no mutexes, no runtime allocation
+// Every link is a 32-bit index into m_arena
 class OrderBook {
  public:
   OrderBook(const OrderBook&) = delete;
@@ -40,7 +40,7 @@ class OrderBook {
             ReportSink& sink);
   ~OrderBook() = default;
 
-  // Sole entry point; matching thread only.
+  // Sole entry point
   void Apply(const OrderCommand& cmd) noexcept;
 
   Price BestBid() const noexcept;
@@ -52,14 +52,14 @@ class OrderBook {
   void HandleCancel(const OrderCommand& cmd) noexcept;
   void HandleReplace(const OrderCommand& cmd) noexcept;
 
-  // Sweep the crossing side; returns unfilled remainder.
+  // Sweep the crossing side - returns unfilled remainder
   Quantity Match(Side taker_side,
                  Price limit,
-                 Quantity qty,
+                 Quantity quantity,
                  const OrderCommand& cmd) noexcept;
 
-  // Dry-run pass for FOK: can `qty` fill at `limit` without trading?
-  bool Fillable(Side taker_side, Price limit, Quantity qty) const noexcept;
+  // Dry-run pass for FOK - can quantity fill at limit
+  bool Fillable(Side taker_side, Price limit, Quantity quantity) const noexcept;
 
   void Rest(const OrderCommand& cmd, Quantity leaves) noexcept;
   void Unlink(NodeIdx node) noexcept;  // remove + release to arena
@@ -67,7 +67,8 @@ class OrderBook {
   void EmitFill(const Order& maker,
                 const OrderCommand& taker,
                 Price price,
-                Quantity qty) noexcept;
+                Quantity quantity,
+                Quantity taker_leaves) noexcept;
   void EmitAck(const OrderCommand& cmd,
                ExecutionReport::Type type,
                Quantity leaves) noexcept;
@@ -79,16 +80,17 @@ class OrderBook {
   BookSide m_asks;
   NodeArena m_arena;
 
-  // OrderId -> NodeRef. Generation in the ref makes a stale cancel a
-  // clean UnknownOrder reject instead of a wrong-order cancel.
+  // OrderId -> NodeRef
+  // Generation in the ref makes a stale cancel a
+  // clean UnknownOrder reject instead of a wrong-order cancel
   std::unordered_map<OrderId, NodeRef> m_index;
 
   ReportSink& m_sink;
-  SeqNum m_seq;
-  Price m_last_bid;
-  Price m_last_ask;
-  Quantity m_last_bid_qty;
-  Quantity m_last_ask_qty;
+  SeqNum m_seq{0};
+  Price m_last_bid{k_no_price};
+  Price m_last_ask{k_no_price};
+  Quantity m_last_bid_quantity{0};
+  Quantity m_last_ask_quantity{0};
 };
 
 }  // namespace lfob

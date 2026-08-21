@@ -28,15 +28,15 @@ inline void SpinPause(int iters) noexcept {
 inline Bbo MakeBbo(SeqNum seq, Price bp, Quantity bq, Price ap, Quantity aq) {
   return {.event_seq = seq,
           .bid_price = bp,
-          .bid_qty = bq,
+          .bid_quantity = bq,
           .ask_price = ap,
-          .ask_qty = aq};
+          .ask_quantity = aq};
 }
 
 inline bool BboEq(const Bbo& a, const Bbo& b) {
   return a.event_seq == b.event_seq && a.bid_price == b.bid_price &&
-         a.bid_qty == b.bid_qty && a.ask_price == b.ask_price &&
-         a.ask_qty == b.ask_qty;
+         a.bid_quantity == b.bid_quantity && a.ask_price == b.ask_price &&
+         a.ask_quantity == b.ask_quantity;
 }
 
 }  // namespace
@@ -49,9 +49,9 @@ TEST_CASE("default-constructed load returns zero", "[seqlock][single]") {
   const Bbo val = sl.Load();
   CHECK(val.event_seq == 0);
   CHECK(val.bid_price == 0);
-  CHECK(val.bid_qty == 0);
+  CHECK(val.bid_quantity == 0);
   CHECK(val.ask_price == 0);
-  CHECK(val.ask_qty == 0);
+  CHECK(val.ask_quantity == 0);
 }
 
 TEST_CASE("Store then Load roundtrips correctly", "[seqlock][single]") {

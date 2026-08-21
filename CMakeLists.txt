@@ -4,6 +4,20 @@ project(lockfree_orderbook)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ── Sanitizers ────────────────────────────────────────────────────────────────
+# ThreadSanitizer: configure with -DLFOB_TSAN=ON to race-check the lock-free
+# rings, seqlock and matching pipeline. Applied directory-wide (so every target
+# below, including tests and benches, is instrumented) and to both the compile
+# and link lines, as -fsanitize=thread requires. TSan is ~5-10x slower, needs a
+# little optimization to stay usable, and cannot be combined with ASan, so it is
+# off by default.
+option(LFOB_TSAN "Build with ThreadSanitizer" OFF)
+if(LFOB_TSAN)
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -O1 -g)
+    add_link_options(-fsanitize=thread)
+    message(STATUS "ThreadSanitizer enabled")
+endif()
+
 
 # ── Clang tooling ────────────────────────────────────────────────────────────
 find_program(CLANG_TIDY    NAMES clang-tidy-19    clang-tidy    REQUIRED)
@@ -25,12 +39,17 @@ FetchContent_MakeAvailable(Catch2)
 # ── Targets ──────────────────────────────────────────────────────────────────
 add_library(lfob
     src/order_book.cpp
+    src/matching_engine.cpp
+    src/affinity.cpp
 )
 
 target_include_directories(lfob PUBLIC include/)
 
-# add_executable(bench bench/bench_throughput.cpp)
-# target_link_libraries(bench PRIVATE lfob)
+add_executable(bench_throughput bench/bench_throughput.cpp)
+target_link_libraries(bench_throughput PRIVATE lfob Threads::Threads)
+
+add_executable(bench_latency bench/bench_latency.cpp)
+target_link_libraries(bench_latency PRIVATE lfob Threads::Threads)
 
 set_target_properties(lfob PROPERTIES
     CXX_CLANG_TIDY "${CLANG_TIDY};--extra-arg=--std=c++23;--warnings-as-errors=*;--header-filter=^${CMAKE_SOURCE_DIR}/(include|src)/.*"
@@ -58,6 +77,8 @@ add_lfob_test(test_mpsc_ring)
 add_lfob_test(test_node_arena)
 add_lfob_test(test_price_level)
 add_lfob_test(test_book_side)
+add_lfob_test(test_order_book)
+add_lfob_test(test_matching_engine)
 
 # ── clang-format target ───────────────────────────────────────────────────────
 file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS

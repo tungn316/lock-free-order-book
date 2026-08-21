@@ -20,11 +20,22 @@ using Generation = std::uint32_t;
 enum class Side : std::uint8_t { BID, ASK };
 enum class TimeInForce : std::uint8_t { DAY, IOC, FOK };
 
-// Cache line size used to pad atomics
-inline constexpr NodeIdx k_null_node = 0xFFFF'FFFFU;
-inline constexpr std::size_t k_cache_line = 64;
+// Used nin 
+inline constexpr NodeIdx k_null_node{0xFFFF'FFFFU};
 
-inline constexpr std::uint32_t k_no_best = 0xFFFF'FFFFU;
+// Cache line size used to pad atomics
+inline constexpr std::size_t k_cache_line{64};
+
+// Used in book_side for empty side with no resting orders so no 'best' order
+inline constexpr std::uint32_t k_no_best{0xFFFF'FFFFU};
+
+inline constexpr Price k_no_price{0xFFFF'FFFF'FFFF'FFFFULL};
+
+// During setup of consumer threads
+inline constexpr std::uint32_t k_invalid_consumer{0xFFFF'FFFFU};
+
+// Matching Engine batch size for TryPushBulk
+inline constexpr std::size_t k_stage_batch{64};
 
 // Stable handle to node, generation guards against recycled slot being
 // addressed by a stale OrderID
@@ -45,8 +56,17 @@ struct OrderCommand {
   ClientId client;       // who to send the ack/fill back to
   OrderId id;            // target order (New: newly assigned id)
   Price price;           // ticks; ignored for Cancel
-  Quantity qty;          // ignored for Cancel
+  Quantity quantity;     // ignored for Cancel
   Timestamp ingress_ts;  // stamped by the I/O thread for latency accounting
+};
+
+// Seqlock holds Bbo Snapshots
+struct Bbo {
+  SeqNum event_seq;
+  Price bid_price;
+  Quantity bid_quantity;
+  Price ask_price;
+  Quantity ask_quantity;
 };
 
 static_assert(std::is_trivially_copyable_v<OrderCommand>);

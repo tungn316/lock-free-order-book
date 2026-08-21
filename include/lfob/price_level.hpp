@@ -7,13 +7,19 @@
 
 namespace lfob {
 
-// Orders resting at one price in time priority. Holds only indices;
-// the arena is passed in so the level itself stays 40-ish bytes and
-// packs densely inside BookSide's dense level array.
+// Orders resting at one price in time priority. Holds only indices
+// the arena is passed in so the level itself stays 24 bytes
+//
+// Quantity m_total_quantity - 8 bytes
+// std::uint32_t m_order_count - 4 bytes
+// NodeIdx m_head - 4 bytes
+// NodeIdx m_tail - 4 bytes
+// 20 Bytes + 4 Padding -> rounds to multiple of 8
+
 class PriceLevel {
  public:
   void PushBack(NodeArena& arena, NodeIdx node) {
-    Order& order = arena.Node(node);
+    Order& order{arena.Node(node)};
     order.next = k_null_node;
     order.prev = m_tail;
 
@@ -29,7 +35,7 @@ class PriceLevel {
   }
 
   void Remove(NodeArena& arena, NodeIdx node) {
-    Order& order = arena.Node(node);
+    Order& order{arena.Node(node)};
 
     if (order.prev != k_null_node) {
       arena.Node(order.prev).next = order.next;

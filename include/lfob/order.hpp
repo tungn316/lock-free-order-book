@@ -13,7 +13,6 @@ struct Order {
   Quantity remaining;
   NodeIdx prev;  // FIFO neighbours within the price level
   NodeIdx next;
-  std::uint32_t level_idx;  // owning level's tick index, for O(1) cancel
   ClientId client;
   Side side;
   TimeInForce tif;

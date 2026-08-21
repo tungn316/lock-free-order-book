@@ -19,6 +19,7 @@ namespace lfob {
 // generation so stale NodeRefs are detectable.
 class NodeArena {
  public:
+  // No need to prefault as resize value initialises
   explicit NodeArena(std::size_t capacity) {
     m_nodes.resize(capacity);
     m_generations.resize(capacity, 0);
@@ -27,36 +28,36 @@ class NodeArena {
     std::ranges::reverse(m_free);
   }
 
-  // O(1): pop_back off free_. Returns kNullNode-tagged ref when
-  // exhausted — the caller must reject the order, never grow.
+  // O(1): pop_back off m_free
+  // Returns kNullNode-tagged ref when exhausted
   NodeRef Acquire() noexcept {
     if (m_free.empty()) {
       return {.idx = k_null_node, .gen = 0};
     }
-    const NodeIdx idx = m_free.back();
+    const NodeIdx idx{m_free.back()};
     m_free.pop_back();
     return {.idx = idx, .gen = GenAt(idx)};
   }
 
-  // O(1): bump generation, push index onto free_.
+  // O(1): bump generation, push index onto m_free
   void Release(NodeIdx idx) noexcept {
     assert(idx < m_nodes.size());
     m_free.push_back(idx);
     ++GenAt(idx);
   }
 
-  // Unchecked access. Hot path; the matcher has already validated.
+  // <---- UNCHECKED ACCESSORS ---->
+  // Matching Engine already validated - Invariant: Pulled off m_free
+
   Order& operator[](NodeIdx idx) noexcept { return NodeAt(idx); }
   const Order& operator[](NodeIdx idx) const noexcept { return NodeAt(idx); }
 
-  // Same as operator[], but named so call sites don't trip the
-  // unchecked-subscript lint. Invariant: idx came off m_free.
+  // Same as operator[] but named to make my LSP happy
   [[nodiscard]] Order& Node(NodeIdx idx) noexcept { return NodeAt(idx); }
-  [[nodiscard]] const Order& Node(NodeIdx idx) const noexcept {
-    return NodeAt(idx);
-  }
+  [[nodiscard]] const Order& Node(NodeIdx idx) const noexcept { return NodeAt(idx); }
 
-  // Checked access: nullptr if idx is stale or out of range.
+  // <---- CHECKED ACCESOSR ---->
+  // return nullptr if idx is stale or out of range
   Order* Resolve(NodeRef ref) noexcept {
     if (ref.idx >= m_generations.size()) {
       return nullptr;
@@ -67,16 +68,9 @@ class NodeArena {
     return nullptr;
   }
 
-  [[nodiscard]] Generation GenerationOf(NodeIdx idx) const noexcept {
-    return GenAt(idx);
-  }
-
-  [[nodiscard]] std::size_t Capacity() const noexcept {
-    return (m_nodes.size());
-  }
-  [[nodiscard]] std::size_t InUse() const noexcept {
-    return m_nodes.size() - m_free.size();
-  }
+  [[nodiscard]] Generation GenerationOf(NodeIdx idx) const noexcept { return GenAt(idx); }
+  [[nodiscard]] std::size_t Capacity() const noexcept { return (m_nodes.size()); }
+  [[nodiscard]] std::size_t InUse() const noexcept { return m_nodes.size() - m_free.size(); }
   [[nodiscard]] bool Exhausted() const noexcept { return m_free.empty(); }
 
  private:
@@ -89,6 +83,8 @@ class NodeArena {
   // arena's own invariant guarantees idx is in range (it came off m_free),
   // so the bounds check is deliberately skipped. Suppression lives in ONE
   // place instead of being scattered across the class.
+  //
+  // tldr: make clangd happy
 
   [[nodiscard]] Order& NodeAt(NodeIdx idx) noexcept {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
