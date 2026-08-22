@@ -48,7 +48,7 @@ class MatchingEngine final : public ReportSink {
                           std::size_t max) noexcept;
 
   // <---- Any reader thread ---->
-  Bbo GetBbo() const noexcept;
+  [[nodiscard]] Bbo GetBbo() const noexcept;
 
   void Start();
   void Stop() noexcept;

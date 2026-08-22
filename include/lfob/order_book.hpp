@@ -2,10 +2,10 @@
 #define ORDER_BOOK_HPP_
 
 #include <cstddef>
-#include <unordered_map>
 #include "book_side.hpp"
 #include "execution_report.hpp"
 #include "node_arena.hpp"
+#include "order_index.hpp"
 
 namespace lfob {
 
@@ -43,9 +43,9 @@ class OrderBook {
   // Sole entry point
   void Apply(const OrderCommand& cmd) noexcept;
 
-  Price BestBid() const noexcept;
-  Price BestAsk() const noexcept;
-  bool Empty() const noexcept;
+  [[nodiscard]] Price BestBid() const noexcept;
+  [[nodiscard]] Price BestAsk() const noexcept;
+  [[nodiscard]] bool Empty() const noexcept;
 
  private:
   void HandleNew(const OrderCommand& cmd) noexcept;
@@ -59,7 +59,8 @@ class OrderBook {
                  const OrderCommand& cmd) noexcept;
 
   // Dry-run pass for FOK - can quantity fill at limit
-  bool Fillable(Side taker_side, Price limit, Quantity quantity) const noexcept;
+  [[nodiscard]] bool Fillable(Side taker_side, Price limit,
+                              Quantity quantity) const noexcept;
 
   void Rest(const OrderCommand& cmd, Quantity leaves) noexcept;
   void Unlink(NodeIdx node) noexcept;  // remove + release to arena
@@ -80,10 +81,10 @@ class OrderBook {
   BookSide m_asks;
   NodeArena m_arena;
 
-  // OrderId -> NodeRef
+  // OrderId -> NodeRef, allocation-free (see order_index.hpp).
   // Generation in the ref makes a stale cancel a
   // clean UnknownOrder reject instead of a wrong-order cancel
-  std::unordered_map<OrderId, NodeRef> m_index;
+  OrderIndex m_index;
 
   ReportSink& m_sink;
   SeqNum m_seq{0};

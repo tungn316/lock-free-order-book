@@ -8,9 +8,8 @@ OrderBook::OrderBook(lfob::Price min_price,
     : m_bids(Side::BID, min_price, max_price),
       m_asks(Side::ASK, min_price, max_price),
       m_arena(max_orders),
-      m_sink(sink) {
-  m_index.reserve(max_orders);
-}
+      m_index(max_orders),
+      m_sink(sink) {}
 
 void OrderBook::Apply(const OrderCommand& cmd) noexcept {
   if (cmd.type == OrderCommand::Type::NEW) {
@@ -70,35 +69,35 @@ void OrderBook::HandleNew(const OrderCommand& cmd) noexcept {
 
 void OrderBook::HandleCancel(const OrderCommand& cmd) noexcept {
   // Find order
-  const auto it = m_index.find(cmd.id);
-  if (it == m_index.end()) {
+  const NodeRef* ref{m_index.Find(cmd.id)};
+  if (ref == nullptr) {
     EmitReject(cmd, ExecutionReport::RejectReason::UNKNOWN_ORDER);
     return;
   }
 
   // Resolve NodeRef - check generation
-  const Order* order{m_arena.Resolve(it->second)};
+  const Order* order{m_arena.Resolve(*ref)};
   if (order == nullptr) {
     EmitReject(cmd, ExecutionReport::RejectReason::UNKNOWN_ORDER);
     return;
   }
 
   const Quantity leaves{order->remaining};
-  Unlink(it->second.idx);
+  Unlink(ref->idx);
   EmitAck(cmd, ExecutionReport::Type::CANCELLED, leaves);
   MaybeEmitTopOfBook();
 }
 
 void OrderBook::HandleReplace(const OrderCommand& cmd) noexcept {
   // find order
-  const auto it = m_index.find(cmd.id);
-  if (it == m_index.end()) {
+  const NodeRef* ref{m_index.Find(cmd.id)};
+  if (ref == nullptr) {
     EmitReject(cmd, ExecutionReport::RejectReason::UNKNOWN_ORDER);
     return;
   }
 
   // resolve NodeRef - check generation
-  const Order* order{m_arena.Resolve(it->second)};
+  const Order* order{m_arena.Resolve(*ref)};
   if (order == nullptr) {
     EmitReject(cmd, ExecutionReport::RejectReason::UNKNOWN_ORDER);
     return;
@@ -116,7 +115,7 @@ void OrderBook::HandleReplace(const OrderCommand& cmd) noexcept {
   }
 
   // Cancel + re-insert, basically HandleCancel -> HandleNew
-  Unlink(it->second.idx);
+  Unlink(ref->idx);
 
   EmitAck(cmd, ExecutionReport::Type::REPLACED, cmd.quantity);
 
@@ -217,7 +216,7 @@ void OrderBook::Unlink(NodeIdx node) noexcept {
     side.OnLevelEmptied(idx);
   }
 
-  m_index.erase(order.id);
+  m_index.Erase(order.id);
   m_arena.Release(node);
 }
 
@@ -242,7 +241,7 @@ void OrderBook::Rest(const OrderCommand& cmd, Quantity leaves) noexcept {
   side.LevelAtIndex(idx).PushBack(m_arena, ref.idx);
   side.MarkOccupied(cmd.price);
 
-  m_index[cmd.id] = ref;
+  m_index.Put(cmd.id, ref);
 }
 
 void OrderBook::EmitFill(const Order& maker,
