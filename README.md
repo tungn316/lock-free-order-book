@@ -16,7 +16,7 @@ _Measured on Ryzen 5600x, governor=performance, isolcpus set --> 4, 5._
 | Throughput (NEW, no cross) | _… orders/sec_ |
 | Service latency p50 | 90 ns |
 | Service latency p99 | 120 ns |
-| Service latency max | 3000 ns |
+| Service latency max | 2000 ns |
 
 ---
 
