@@ -13,17 +13,15 @@ _Measured on Ryzen 5600x, governor=performance, isolcpus set --> 4, 5._
 
 | Metric | Value |
 |--------|-------|
-| Throughput (NEW, no cross) | _… orders/sec_ |
+| Throughput | _… orders/sec_ |
 | Service latency p50 | 90 ns |
 | Service latency p99 | 120 ns |
 | Service latency max | 3000 ns |
 
 ---
 
----
-
 ## architecture
-'
+
 ```
      ITCH multicast ──► FeedHandler ─┐
                                      ├─► MpscRing ─► matching thread ─► OrderBook
@@ -47,7 +45,11 @@ atomics, no CAS, no ABA, and all the concurrency lives at the boundaries
 | Best bid/offer | `Seqlock<Bbo>` | `seqlock.hpp` | 1 writer, N readers, wait-free writer |
 | Egress broadcast | `SpmcRing<ExecutionReport>` | `spmc_ring.hpp` | 1 producer → N consumers, lossless in-process |
 | Orchestration | `MatchingEngine` | `matching_engine.{hpp,cpp}` | owns rings, seqlock, pinned thread |
-| Front end | `Gateway`, `ItchTranslator` | `gateway.hpp`, `itch.hpp` | network ↔ engine (in progress, see Roadmap) |
+| Client intake | `ClientIo` | `client_io.{hpp,cpp}` | epoll accept + order parse, 1 thread |
+| Egress fan-out | `OutputWorker` ×N | `output_worker.{hpp,cpp}` | drains egress ring → its own sockets, 1 thread each |
+| Per-client staging | `ClientSession`, `OutboundBuffer` | `client_session.{hpp,cpp}`, `outbound_buffer.{hpp,cpp}` | 2 threads, disjoint fields, no locks |
+| ITCH feed | `FeedHandler`, `MoldSession`, `ItchTranslator` | `feed_handler.{hpp,cpp}`, `itch.{hpp,cpp}` | multicast ingress, own thread + core |
+| Facade | `Gateway` | `gateway.{hpp,cpp}` | owns the front end + startup/shutdown order |
 
 ---
 
@@ -94,6 +96,82 @@ change and drop the possibly-torn bytes on the floor, **silent, never wrong**. I
 finds out via `IsOutputWorkerLive()`, calls `RejoinOutputWorker()` to re-attach at
 the live edge, and owes its clients a gap notice plus a fresh snapshot.
 Recovery is *not* a replay: a worker that fell far enough behind to be evicted wants a fresh snapshot
+
+---
+
+## Front end: gateway & feed handler
+
+The `Gateway` is everything between the engine and the network. Its one job is
+to make sure **no slow client or wedged worker can ever reach back and stall the
+book**. It owns three moving parts and the strict order they start and stop in.
+
+```
+    ITCH multicast ──► FeedHandler ─┐
+                                    ├─► MpscRing ─► matching thread
+    client TCP ──────► ClientIo ────┘                    │
+                                                         ▼
+    client TCP ◄────── OutputWorker×N ◄──────────── SpmcRing
+```
+
+**`ClientIo` (ingress).** One thread owns the listening socket and an `epoll`
+set covering every client fd. On a readable event it either `accept4`s new
+connections or reads a client's fixed-size `WireOrder`s, decodes+validates them
+into `OrderCommand`s (stamping the session's own client id, so the wire can
+never spoof another), and `SubmitBulk`s the batch. A full ingress ring is a
+normal outcome: the overflow is refused and each client owed an `INGRESS_FULL`
+reject (which `ClientIo` can't emit itself since egress is single-producer), so it
+**injects the reject through the engine**, and the matching thread stamps its
+sequence and publishes it like any other report.
+
+**`OutputWorker` (egress).** Several workers each own a broadcast cursor and a
+**disjoint** partition of client sessions, so the fan-out needs
+no locks. A worker drains the egress ring, routes each report
+(`PRIVATE`/`PUBLIC`/`BOTH`), stages the bytes into each session's outbound
+buffer, and flushes the sockets with non-blocking `writev`. New clients are
+handed over by `ClientIo` through a per-worker SPSC inbox that the worker drains
+at the top of every poll, `m_sessions` stays mutated by one thread only.
+
+**`ClientSession` + `OutboundBuffer`.** A session is touched by two threads
+(`ClientIo` reads, its worker writes) but they touch **disjoint fields**, the
+only shared crossing is one atomic `State`. Its
+outbound buffer is a bounded per-client byte ring, and the two write paths carry
+**opposite loss policies**:
+
+- **public** market data is *lossy*: a full buffer drops the frame, marks the
+  session `GAPPED`, and the worker later re-primes it with a gap notice + a fresh
+  BBO snapshot (read wait-free through the seqlock). A lagging client wants the
+  *current* book, not a replay.
+- **private** fills/acks are *lossless-or-disconnect*: a full buffer moves the
+  session to `CLOSING` instead of dropping. A trader that never learns it was
+  filled is worse off than one that gets disconnected and reconciles.
+
+**`FeedHandler` (ITCH ingress).** The second way orders reach the engine: a
+dedicated thread on its own core pulls NASDAQ's MoldUDP64 multicast with batched
+`recvmmsg`, runs it through the three-stage ITCH stack, and submits the results.
+The stages are deliberately separable and each unit-tested from a byte buffer:
+
+| Stage | Job | File |
+|-------|-----|------|
+| `MoldSession` | datagram → in-order messages, arithmetic gap/duplicate detection (the A/B feeds are deduped, not errors) | `itch.{hpp,cpp}` |
+| `DecodeItch` | big-endian, unaligned message bytes → flat `ItchMessage` POD | `itch.{hpp,cpp}` |
+| `ItchTranslator` | `ItchMessage` → `OrderCommand` for one symbol; symbol/tick/band filtering, halt gating | `itch.{hpp,cpp}` |
+
+A feed **gap** is unrecoverable from the live stream, so `FeedHandler` stops
+submitting and flags itself unhealthy rather than replaying orders the real
+market has already removed. The decoded slice covers the book-moving types
+(`SYSTEM_EVENT`, `TRADING_ACTION`, `ADD_ORDER`/`_MPID`, `ORDER_DELETE`); the
+execution/cancel/replace family is deferred behind a priority-preserving reduce
+command the engine does not yet have (see Roadmap).
+
+**Lifecycle ordering (why the facade exists).** Start-up is fallible-setup-first,
+then threads: workers **register their egress cursors before the engine can
+publish** (a consumer that joins late silently misses everything before it),
+then the listener binds and the feed joins, then every thread starts — workers
+before intake, so nothing is ever produced with no one reading. Shutdown is the
+mirror: stop intake first so the engine drains, then retire the workers so they
+leave the broadcast gracefully instead of being evicted. Sessions are freed only
+after every worker has joined, so a worker's raw session pointer can never
+dangle.
 
 ---
 
@@ -177,6 +255,11 @@ release and TSan builds:
 - **Integration** - `matching_engine`: end-to-end submit → match → drain,
   including the eviction path (a wedged worker is detached within the grace
   period and the engine keeps serving) and rejoin at the live edge.
+- **Front end & wire** - `outbound_buffer` (byte-ring wrap, partial flush,
+  all-or-nothing framing), `report_wire` / `order_wire` (routing + encode/decode
+  round-trips), and `itch` (the decoder, MoldUDP64 framing with the full
+  gap/duplicate/heartbeat/end-of-session lifecycle, and the translator's
+  filter/tick/band/halt paths — all driven from byte buffers, no socket).
 
 ---
 
@@ -210,16 +293,29 @@ and reports the p50/p99/max spread across repeats
 
 ## Roadmap
 
-- **ITCH 5.0 / MoldUDP64 feed handler** - `itch.hpp` declares the wire layer
-  (MoldUDP64 framing + gap detection, an unaligned big-endian `DecodeItch`, and an
-  `ItchTranslator` that maps the outcome feed to engine commands in either
-  `BOOK_REBUILD` or `SYNTHETIC_FLOW` mode).
-- **Gateway** - `gateway.hpp` declares the network front end (client TCP sessions,
-  per-session outbound staging, report routing PRIVATE/PUBLIC/BOTH). Definitions
-  pending.
+The engine and the full front end (gateway + ITCH feed handler) are implemented,
+tested, and compile/link as one library. What's left lurking:
+
+- **Priority-preserving reduce** - the one real engine feature still missing.
+  `OrderCommand` has only `NEW`/`CANCEL`/`REPLACE`, so ITCH's execution/cancel
+  family (`E`/`C`/`X`), which shrinks a resting order's shares *in place* (keeping
+  its FIFO queue position), maps to `UNSUPPORTED` today — `REPLACE` would send the
+  order to the back of the queue and corrupt time priority. Adding a `REDUCE`
+  verb (O(1) decrement via the `OrderIndex`) makes `BOOK_REBUILD` *faithful*:
+  without it, resting orders never draw down as the real market executes against
+  them, so the mirrored book slowly drifts from NASDAQ's.
+- **Runtime session reclaim** - a disconnected client currently leaves a `CLOSED`
+  shell (holding its fd + buffer) until `Gateway::Stop()`. Fine for bounded runs;
+  a long-lived server needs a worker→`ClientIo` retire queue to free sessions
+  mid-run.
+- **Real ITCH/OUCH wire formats** - inbound `WireOrder` and outbound reports are
+  raw-POD placeholders today, routed through the single `DecodeOrder` /
+  `EncodeReport` seams so a real protocol swaps in without touching the pipeline.
+- **A runnable front end** - a `main` that boots a `Gateway` end-to-end (the
+  benchmarks still drive the engine directly through its ring API).
 
 ### Non-goals
 
-Single-symbol, in-process, no persistence, no networking layer beyond the
-declared gateway. The point of the project is the concurrency and matching core
-done correctly and measurably, not a production exchange.
+Single-symbol, in-process, no persistence. The point of the project is the
+concurrency and matching core done correctly and measurably, not a production
+exchange.
