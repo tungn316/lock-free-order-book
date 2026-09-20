@@ -1,97 +1,92 @@
 #ifndef GATEWAY_HPP_
 #define GATEWAY_HPP_
 
+#include <array>
 #include <cstddef>
-#include <span>
-#include <stop_token>
-#include <thread>
-#include <vector>
+#include <cstdint>
+#include <optional>
+
+#include "client_io.hpp"
+#include "feed_handler.hpp"
+#include "gateway_config.hpp"
 #include "matching_engine.hpp"
+#include "output_worker.hpp"
 
 namespace lfob {
 
-// <---- Ingress ---->
+// The gateway is everything between the engine and the network
+//
+//        ITCH multicast ──► FeedHandler ─┐
+//                                        ├─► MpscRing ─► matching thread
+//        client TCP ──────► ClientIo ────┘                     │
+//                                                              ▼
+//        client TCP ◄────── OutputWorker xN ◄────────────── SpmcRing
+//
+//   ingress   lossy. MpscRing::TryPush fails under overload and the client
+//             gets an INGRESS_FULL reject. Refusing an order is a normal,
+//             reportable outcome; queueing it unboundedly is not
+//
+//   egress    lossless inside the process, SpmcRing applies back-pressure
+//             so no output worker misses a report -- and lossy at the socket.
+//             A client that cannot keep up gets its public market data
+//             dropped and a gap notice, because stalling a socket write
+//             would push back through the worker, into the ring, and onto the
+//             matching thread. One slow TCP receiver must never be able to
+//             reach the book
+//
+// The pieces live in their own headers -- client_session, output_worker,
+// client_io, feed_handler -- with the shared tuning knobs in gateway_config.
+// This header ties them together behind the Gateway facade.
 
-class Session {
- public:
-  Session(ClientId id, int fd);
+// <---- Facade ---->
 
-  std::size_t Parse(std::span<const std::byte> bytes,
-                    std::span<OrderCommand> out);
-  [[nodiscard]] bool Validate(const OrderCommand& cmd) const;
-
-  [[nodiscard]] ClientId Id() const noexcept;
-  [[nodiscard]] int Fd() const noexcept;
-
- private:
-  ClientId m_id;
-  int m_fd;
-  std::vector<std::byte> m_inbuf;
-};
-
-class IoThread {
- public:
-  IoThread(MatchingEngine& engine, int cpu_core);
-
-  void AddSession(Session session);
-  void Start();
-  void Stop() noexcept;
-
- private:
-  void Run(std::stop_token stop);
-  void RejectForBackpressure(Session& session, const OrderCommand& cmd);
-
-  MatchingEngine* m_engine;
-  int m_cpu_core;
-  int m_epoll_fd;
-  std::vector<Session> m_sessions;
-  std::array<OrderCommand, k_drain_batch> m_staging;
-  std::jthread m_thread;
-};
-
-// <---- Egress ---->
-
-class OutputWorker {
- public:
-  enum class Transport : std::uint8_t { TCP_DROP, UDP_MULTICAST };
-
-  OutputWorker(MatchingEngine& engine, Transport transport, int cpu_core);
-
-  void Start();
-  void Stop() noexcept;
-
-  // Reports lost because this worker fell more than kEgressCapacity
-  // behind. Surfacing this is mandatory: a silent gap in a market data
-  // feed is worse than a visible one.
-  [[nodiscard]] std::uint64_t Missed() const noexcept;
-
- private:
-  void Run(std::stop_token stop);
-  void Serialise(const ExecutionReport& report);
-  void Flush();
-
-  MatchingEngine* m_engine;
-  MatchingEngine::ConsumerId m_consumer;
-  Transport m_transport;
-  int m_cpu_core;
-  std::array<ExecutionReport, k_drain_batch> m_staging;
-  std::vector<std::byte> m_outbuf;
-  std::jthread m_thread;
-};
-
+// Owns the whole front end and its startup order, which matters: workers
+// register their egress cursors before the engine publishes anything, because
+// SpmcRing::Register is single-threaded setup and a consumer that joins late
+// would silently miss everything published before it
 class Gateway {
  public:
-  Gateway(MatchingEngine& engine,
-          std::span<const int> io_cores,
-          std::span<const int> output_cores);
+  struct Config {
+    std::uint16_t listen_port;
+    int io_cpu_core;
+    std::size_t worker_count;
+    std::array<int, k_max_output_workers> worker_cpu_cores;
+    bool enable_feed;
+    FeedHandler::Config feed;
+  };
 
-  void Start();
+  Gateway(MatchingEngine& engine, const Config& config);
+  ~Gateway();
+
+  Gateway(const Gateway&) = delete;
+  Gateway(Gateway&&) = delete;
+  Gateway& operator=(const Gateway&) = delete;
+  Gateway& operator=(Gateway&&) = delete;
+
+  // Registers workers, binds the listener, joins the feed, then starts every
+  // thread. Returns false without starting anything if any step fails
+  bool Start();
+
+  // Reverse order: stop intake first so the engine drains, then retire the
+  // workers so they leave the broadcast cleanly rather than being evicted
   void Stop() noexcept;
 
+  // Aggregated monitoring
+  [[nodiscard]] std::uint64_t ClientDrops() const noexcept;
+  [[nodiscard]] std::uint64_t WorkerEvictions() const noexcept;
+
  private:
-  MatchingEngine* m_engine;
-  std::vector<IoThread> m_io;
-  std::vector<OutputWorker> m_output;
+  MatchingEngine& m_engine;
+  Config m_config;
+  ClientIo m_io;
+
+  // Workers are neither copyable nor movable -- they own a thread and an
+  // egress cursor -- so they are constructed in place and never relocated.
+  // A vector would need them move-insertable just to grow
+  std::array<std::optional<OutputWorker>, k_max_output_workers> m_workers{};
+
+  FeedHandler m_feed;
+  bool m_started{false};
 };
 
 }  // namespace lfob

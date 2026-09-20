@@ -6,12 +6,12 @@
 static inline void CpuRelax() noexcept {
   _mm_pause();
 }
-#elifdef(__aarch64__)
+#elifdef __aarch64__
 #include <arm_acle.h>
 static inline void CpuRelax() noexcept {
   __yield();
 }
-#elifdef(__arm__)
+#elifdef __arm__
 #include <arm_acle.h>
 static inline void CpuRelax() noexcept {
   __yield();

@@ -16,6 +16,7 @@ struct ExecutionReport {
     REPLACED,
     FILL,         // one side of a trade
     TOP_OF_BOOK,  // BBO changed
+    GAP_NOTICE,
   };
 
   enum class RejectReason : std::uint8_t {

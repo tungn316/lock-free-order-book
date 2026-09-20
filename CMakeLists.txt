@@ -41,6 +41,15 @@ add_library(lfob
     src/order_book.cpp
     src/matching_engine.cpp
     src/affinity.cpp
+    src/outbound_buffer.cpp
+    src/report_wire.cpp
+    src/order_wire.cpp
+    src/itch.cpp
+    src/client_session.cpp
+    src/output_worker.cpp
+    src/client_io.cpp
+    src/feed_handler.cpp
+    src/gateway.cpp
 )
 
 target_include_directories(lfob PUBLIC include/)
@@ -71,6 +80,10 @@ function(add_lfob_test name)
         TEST_PREFIX "${name}::")
 endfunction()
 
+add_lfob_test(test_outbound_buffer)
+add_lfob_test(test_report_wire)
+add_lfob_test(test_order_wire)
+add_lfob_test(test_itch)
 add_lfob_test(test_seqlock)
 add_lfob_test(test_spmc_ring)
 add_lfob_test(test_mpsc_ring)

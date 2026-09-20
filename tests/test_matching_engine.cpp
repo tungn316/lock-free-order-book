@@ -1,3 +1,5 @@
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <memory>
@@ -410,6 +412,92 @@ TEST_CASE("Stop drains commands still queued at shutdown",
   // reports, so target 2 * k_n; the ACCEPTED subset must still be exactly k_n.
   const auto log = Drain(eng, id, /*want=*/2 * k_n);
   CHECK(Count(log, ExecutionReport::Type::ACCEPTED) == k_n);
+}
+
+// ── a dead output worker must not be able to stall the engine ────────────────
+
+TEST_CASE("a wedged output worker is evicted instead of stalling the book",
+          "[engine][egress][evict]") {
+  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
+                                                  k_no_pin);
+  auto& eng = *eng_ptr;
+
+  const auto live = eng.RegisterOutputWorker();
+  const auto dead = eng.RegisterOutputWorker();  // registers, never reads
+  eng.Start();
+
+  // Enough resting orders to overflow the egress ring: each one emits an
+  // ACCEPTED and a TOP_OF_BOOK (the level's quantity changes every time), so
+  // ~2x this many reports against a 65536-slot ring.
+  constexpr std::size_t k_orders = 40'000;
+
+  std::atomic<std::size_t> accepted{0};
+  std::atomic<bool> stop{false};
+  std::atomic<bool> live_evicted{false};
+
+  std::thread drainer([&] {
+    std::array<ExecutionReport, 256> buf{};
+    while (!stop.load(std::memory_order::relaxed)) {
+      const std::size_t n = eng.ReadReports(live, buf.data(), buf.size());
+      for (std::size_t i = 0; i < n; ++i) {
+        if (buf.at(i).type == ExecutionReport::Type::ACCEPTED) {
+          accepted.fetch_add(1, std::memory_order::relaxed);
+        }
+      }
+      // What a real output worker does when it comes up empty: an empty read
+      // is indistinguishable from a quiet market, so ask. On an unpinned CI
+      // box this worker can itself be starved past k_egress_stall_budget_ns,
+      // and then the honest answer is a gap, not a longer wait.
+      if (n == 0 && !eng.IsOutputWorkerLive(live)) {
+        live_evicted.store(true);
+        eng.RejoinOutputWorker(live);
+      }
+    }
+  });
+
+  // Without eviction this loop never finishes: the matching thread wedges on
+  // the full egress ring, ingress backs up and every Submit starts failing.
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(20);
+  std::size_t sent = 0;
+  while (sent < k_orders && std::chrono::steady_clock::now() < deadline) {
+    if (eng.Submit(*Cmd::New(static_cast<OrderId>(sent + 1), Side::ASK, 500, 1))) {
+      ++sent;
+    }
+  }
+
+  while (accepted.load() < k_orders && !live_evicted.load() &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::yield();
+  }
+  stop.store(true);
+  drainer.join();
+
+  // The claim under test: the engine kept accepting orders. Without eviction
+  // ingress would have filled and Submit would have started failing.
+  CHECK(sent == k_orders);
+
+  // The worker that stopped draining was thrown overboard.
+  CHECK(eng.EgressEvictions() >= 1);
+  CHECK_FALSE(eng.IsOutputWorkerLive(dead));
+
+  // Unless the scheduler starved the healthy worker past the budget as well,
+  // it stayed attached and missed nothing.
+  if (!live_evicted.load()) {
+    CHECK(accepted.load() == k_orders);
+    CHECK(eng.IsOutputWorkerLive(live));
+  }
+
+  // Recovery is a rejoin at the live edge, not a replay of the backlog.
+  REQUIRE(eng.RejoinOutputWorker(dead));
+  CHECK(eng.IsOutputWorkerLive(dead));
+
+  std::array<ExecutionReport, 8> buf{};
+  CHECK(eng.ReadReports(dead, buf.data(), buf.size()) == 0);
+
+  // The BBO seqlock is readable throughout, which is what lets a rejoining
+  // worker resync its clients without touching the ring it was evicted from.
+  CHECK(eng.GetBbo().ask_price == 500);
 }
 
 // ── global sequencing across the whole stream ────────────────────────────────

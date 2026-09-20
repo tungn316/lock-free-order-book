@@ -20,7 +20,6 @@ using Generation = std::uint32_t;
 enum class Side : std::uint8_t { BID, ASK };
 enum class TimeInForce : std::uint8_t { DAY, IOC, FOK };
 
-// Used nin 
 inline constexpr NodeIdx k_null_node{0xFFFF'FFFFU};
 
 // Cache line size used to pad atomics

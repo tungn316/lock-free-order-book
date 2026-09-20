@@ -73,10 +73,30 @@ std::size_t MatchingEngine::ReadReports(ConsumerId id,
   return m_egress.TryReadBulk(id, out, max);
 }
 
+bool MatchingEngine::IsOutputWorkerLive(ConsumerId id) const noexcept {
+  return m_egress.IsAttached(id);
+}
+
+bool MatchingEngine::RejoinOutputWorker(ConsumerId id) noexcept {
+  return m_egress.Rejoin(id);
+}
+
+void MatchingEngine::RetireOutputWorker(ConsumerId id) noexcept {
+  m_egress.Leave(id);
+}
+
 // <---- Any reader thread ---->
 
 Bbo MatchingEngine::GetBbo() const noexcept {
   return m_bbo.Load();
+}
+
+std::uint64_t MatchingEngine::IngressRejects() const noexcept {
+  return m_ingress_rejects.load(std::memory_order::relaxed);
+}
+
+std::uint64_t MatchingEngine::EgressEvictions() const noexcept {
+  return m_egress.Evictions();
 }
 
 // <---- Lifecycle ---->
@@ -136,7 +156,23 @@ std::size_t MatchingEngine::Poll() noexcept {
   for (std::size_t i{0}; i < n; ++i) {
     m_book.Apply(batch.at(i));
   }
-  return n;
+
+  // Drain synthetic reports (e.g. backpressure rejects the I/O threads could not
+  // deliver themselves). Publishing here is what keeps the egress ring
+  // single-producer: only this thread ever emits. The book stamps each with the
+  // next egress sequence, so the injected reports slot cleanly into the stream
+  std::size_t injected{0};
+  for (std::optional<ExecutionReport> r{m_inject.TryPop()}; r.has_value();
+       r = m_inject.TryPop()) {
+    m_book.EmitInjected(*r);
+    ++injected;
+  }
+
+  return n + injected;
+}
+
+bool MatchingEngine::InjectReport(const ExecutionReport& report) noexcept {
+  return m_inject.TryPush(report);
 }
 
 // Called only from the matching thread, inside OrderBook::Apply
@@ -160,9 +196,44 @@ void MatchingEngine::Emit(const ExecutionReport& report_in) {
     });
   }
 
-  // Egress is lossless with back-pressure: spin until the slowest consumer makes room
+  // Egress is lossless with back-pressure, so a full ring means waiting on the
+  // slowest worker. Common case: it has room, one store, done
+  if (!m_egress.TryPush(report)) {
+    PublishOrEvict(report);
+  }
+}
+
+// Back-pressure from a live worker is a feature (it's what makes egress
+// lossless) back-pressure from a dead one is an outage. This thread is the
+// only thing draining ingress, so a worker that never advances its cursor
+// would stop the book, fill the ingress ring and turn every client order into
+// an INGRESS_FULL reject -- one dead consumer taking down the exchange.
+//
+// So the wait is bounded. Once the grace period expires, whoever is holding
+// the gate is evicted and the engine moves on. The victim keeps its
+// registration and finds out on its next read that it has been detached
+void MatchingEngine::PublishOrEvict(const ExecutionReport& report) noexcept {
+  Timestamp deadline{NowNanos() + k_egress_stall_budget_ns};
+  std::uint32_t spins{0};
+
   while (!m_egress.TryPush(report)) {
-    CpuRelax(); // hint to processor that we are in spin-lock
+    CpuRelax();  // hint to processor that we are in spin-lock
+    if (++spins < k_egress_stall_poll_spins) {
+      continue;
+    }
+    spins = 0;
+    if (NowNanos() < deadline) {
+      continue;
+    }
+
+    // Evicting frees the gate, but another worker may be stalled right behind
+    // it. Restart the budget so the next one is judged on its own merits
+    // rather than inheriting a deadline that has already expired
+    const ConsumerId victim{m_egress.BlockingConsumer()};
+    if (victim.idx != k_invalid_consumer) {
+      m_egress.Evict(victim);
+    }
+    deadline = NowNanos() + k_egress_stall_budget_ns;
   }
 }
 

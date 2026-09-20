@@ -145,9 +145,9 @@ class MpscRing {
       // slot.ready = (m_head + 1) -> has been written to
       if (ready == expected) {
         ++n;
+        out[i] = slot.payload;
         slot.ready.store(static_cast<SeqNum>(m_head) + CAPACITY,
                          std::memory_order::release);
-        out[i] = slot.payload;
         ++m_head;
       } else {
         break;

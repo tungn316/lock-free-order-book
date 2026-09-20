@@ -43,6 +43,13 @@ class OrderBook {
   // Sole entry point
   void Apply(const OrderCommand& cmd) noexcept;
 
+  // Stamp an externally-built report with the next egress sequence and route it
+  // to the sink, exactly like a book-generated report. Lets the engine inject
+  // synthetic reports (e.g. an INGRESS_FULL reject for a command that never
+  // reached the book) without breaking the strictly-increasing, gapless seq.
+  // Matching-thread only, same as Apply -- m_seq is not atomic
+  void EmitInjected(ExecutionReport report) noexcept;
+
   [[nodiscard]] Price BestBid() const noexcept;
   [[nodiscard]] Price BestAsk() const noexcept;
   [[nodiscard]] bool Empty() const noexcept;

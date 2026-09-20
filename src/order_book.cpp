@@ -314,6 +314,11 @@ void OrderBook::EmitAck(const OrderCommand& cmd,
   });
 }
 
+void OrderBook::EmitInjected(ExecutionReport report) noexcept {
+  report.seq = ++m_seq;
+  m_sink.Emit(report);
+}
+
 void OrderBook::EmitReject(const OrderCommand& cmd,
                            ExecutionReport::RejectReason reason) noexcept {
   m_sink.Emit(ExecutionReport{

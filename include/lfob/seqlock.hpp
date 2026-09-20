@@ -4,6 +4,8 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <type_traits>
 #include "cpu_relax.h"
 #include "types.hpp"
@@ -14,6 +16,9 @@ namespace lfob {
 template <typename T>
 class alignas(k_cache_line) Seqlock {
   static_assert(std::is_trivially_copyable_v<T>);
+  // The payload is copied word-wise through lock-free 64-bit atomics (see the
+  // note on m_value); a target without those would silently take a mutex.
+  static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
 
  public:
   Seqlock() = default;
@@ -60,25 +65,34 @@ class alignas(k_cache_line) Seqlock {
  private:
   std::atomic<SeqNum> m_seq{0};  // odd = in progress
 
-  // Payload stored as raw atomic bytes the concurrent byte-wise copy in
-  // Store/Load is data-race-free under the C++ memory model. unsigned char
-  // atomics are always lock-free, so this stays lock-free for any size T.
-  alignas(T) std::array<std::atomic<unsigned char>, sizeof(T)> m_value{};
+  // Payload copied word-wise through relaxed atomics, matching SpmcRing::Slot:
+  // each word access is well-defined under the concurrent Store/Load race, and
+  // the seq re-check discards any torn read. The atomics exist only to remove
+  // the data-race UB; the seq counter is what keeps the whole T consistent.
+  //
+  // An 8-byte atomic can't legally view T's bytes directly (strict aliasing)
+  // and sizeof(T) need not be a multiple of 8, so a plain uint64 array bridges
+  // the two via memcpy -- alias-safe, and zero-padding the ragged tail. Fewer
+  // atomic ops than a byte-wise copy (sizeof(T)/8 vs sizeof(T)).
+  static constexpr std::size_t k_words{
+      (sizeof(T) + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t)};
+  alignas(T) std::array<std::atomic<std::uint64_t>, k_words> m_value{};
 
-  // The atomics are here only to make each conflicting byte access well-defined
   void CopyTo(const T* src) noexcept {
-    auto* v = m_value.data();
-    const auto* s = reinterpret_cast<const unsigned char*>(src);
-    for (std::size_t i{0}; i < sizeof(T); ++i) {
-      v[i].store(s[i], std::memory_order::relaxed);
+    std::array<std::uint64_t, k_words> raw{};
+    std::memcpy(raw.data(), src, sizeof(T));
+    for (auto w{0UZ}; w < k_words; ++w) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)
+      m_value[w].store(raw[w], std::memory_order::relaxed);
     }
   }
   void CopyFrom(T* dst) const noexcept {
-    auto* v = m_value.data();
-    auto* d = reinterpret_cast<unsigned char*>(dst);
-    for (std::size_t i{0}; i < sizeof(T); ++i) {
-      d[i] = v[i].load(std::memory_order::relaxed);
+    std::array<std::uint64_t, k_words> raw{};
+    for (auto w{0UZ}; w < k_words; ++w) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)
+      raw[w] = m_value[w].load(std::memory_order::relaxed);
     }
+    std::memcpy(dst, raw.data(), sizeof(T));
   }
 };
 
