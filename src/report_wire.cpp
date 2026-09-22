@@ -20,7 +20,8 @@ Route RouteOf(const ExecutionReport& report) noexcept {
   return Route::PRIVATE;  // unknown -> safest is owner-only
 }
 
-std::size_t EncodeReport(const ExecutionReport& report, std::byte* out,
+std::size_t EncodeReport(const ExecutionReport& report,
+                         std::byte* out,
                          std::size_t max) noexcept {
   // Current wire format is the raw report POD: fixed size, host order, one type
   // on the stream (see execution_report.hpp). Every producer routes through

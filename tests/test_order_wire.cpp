@@ -23,7 +23,8 @@ WireOrder MakeWire() {
 
 }  // namespace
 
-TEST_CASE("DecodeOrder maps a valid record and stamps the client", "[order_wire]") {
+TEST_CASE("DecodeOrder maps a valid record and stamps the client",
+          "[order_wire]") {
   const WireOrder wire{MakeWire()};
   OrderCommand cmd{};
 
@@ -34,15 +35,17 @@ TEST_CASE("DecodeOrder maps a valid record and stamps the client", "[order_wire]
   CHECK(cmd.id == 4242);
   CHECK(cmd.price == 10000);
   CHECK(cmd.quantity == 25);
-  CHECK(cmd.client == 77);      // stamped by the gateway, not from the wire
-  CHECK(cmd.ingress_ts == 0);   // the engine stamps this on submit
+  CHECK(cmd.client == 77);     // stamped by the gateway, not from the wire
+  CHECK(cmd.ingress_ts == 0);  // the engine stamps this on submit
 }
 
 TEST_CASE("DecodeOrder accepts every in-range enum value", "[order_wire]") {
   OrderCommand cmd{};
-  for (std::uint8_t t{0}; t <= static_cast<std::uint8_t>(OrderCommand::Type::REPLACE); ++t) {
+  for (std::uint8_t t{0};
+       t <= static_cast<std::uint8_t>(OrderCommand::Type::REPLACE); ++t) {
     for (std::uint8_t s{0}; s <= static_cast<std::uint8_t>(Side::ASK); ++s) {
-      for (std::uint8_t f{0}; f <= static_cast<std::uint8_t>(TimeInForce::FOK); ++f) {
+      for (std::uint8_t f{0}; f <= static_cast<std::uint8_t>(TimeInForce::FOK);
+           ++f) {
         WireOrder wire{MakeWire()};
         wire.type = t;
         wire.side = s;

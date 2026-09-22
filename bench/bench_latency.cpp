@@ -119,9 +119,9 @@ void PrintHistogram(const std::vector<std::uint64_t>& samples) {
       std::snprintf(label, sizeof(label), "      < %6llu ns",
                     static_cast<unsigned long long>(k_edges_ns[0]));
     } else if (b == k_edges_ns.size()) {
-      std::snprintf(label, sizeof(label), ">= %6llu ns      ",
-                    static_cast<unsigned long long>(
-                        k_edges_ns[k_edges_ns.size() - 1]));
+      std::snprintf(
+          label, sizeof(label), ">= %6llu ns      ",
+          static_cast<unsigned long long>(k_edges_ns[k_edges_ns.size() - 1]));
     } else {
       std::snprintf(label, sizeof(label), "%6llu - %6llu ns",
                     static_cast<unsigned long long>(k_edges_ns[b - 1]),
@@ -148,8 +148,7 @@ void PrintHistogram(const std::vector<std::uint64_t>& samples) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  const std::size_t num_samples =
-      ParseArg<std::size_t>(argc, argv, 1, 500'000);
+  const std::size_t num_samples = ParseArg<std::size_t>(argc, argv, 1, 500'000);
   const std::uint64_t rate = ParseArg<std::uint64_t>(argc, argv, 2, 500'000);
   const int cpu_core = ParseArg<int>(argc, argv, 3, -1);
   // Core for the submitter (this thread) and the drainer thread. Left
@@ -165,22 +164,22 @@ int main(int argc, char** argv) {
   }
 
   const std::size_t total = std::min(num_samples + k_warmup, k_max_orders);
-  const std::size_t samples_wanted =
-      total > k_warmup ? total - k_warmup : 0;
+  const std::size_t samples_wanted = total > k_warmup ? total - k_warmup : 0;
 
   // Inter-arrival gap in ns for the target offered rate. 0 => submit as fast as
   // possible (open the floodgates to see the saturated tail).
   const std::uint64_t gap_ns = rate == 0 ? 0 : 1'000'000'000ULL / rate;
 
-  auto eng = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                              cpu_core);
+  auto eng =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, cpu_core);
   const auto consumer = eng->RegisterOutputWorker();
 
   // Drainer collects one latency sample per ACCEPTED report — exactly one per
-  // NEW command, so TOP_OF_BOOK/etc. never double-count. Warmup ids (<= k_warmup)
-  // are drained but not recorded. The vector is reserved up front, and storing
-  // into it does not affect the measurement: each delta is already fixed by the
-  // two timestamps the engine stamped long before the drainer sees the report.
+  // NEW command, so TOP_OF_BOOK/etc. never double-count. Warmup ids (<=
+  // k_warmup) are drained but not recorded. The vector is reserved up front,
+  // and storing into it does not affect the measurement: each delta is already
+  // fixed by the two timestamps the engine stamped long before the drainer sees
+  // the report.
   std::atomic<bool> draining{true};
   std::vector<std::uint64_t> samples;
   samples.reserve(samples_wanted);
@@ -192,7 +191,8 @@ int main(int argc, char** argv) {
     auto collect = [&](std::size_t got) {
       for (std::size_t i = 0; i < got; ++i) {
         const ExecutionReport& r = buf[i];
-        if (r.type == ExecutionReport::Type::ACCEPTED && r.order_id > k_warmup) {
+        if (r.type == ExecutionReport::Type::ACCEPTED &&
+            r.order_id > k_warmup) {
           samples.push_back(r.match_ts - r.ingress_ts);
         }
       }
@@ -207,8 +207,7 @@ int main(int argc, char** argv) {
       }
     }
     for (std::size_t got = eng->ReadReports(consumer, buf.data(), buf.size());
-         got > 0;
-         got = eng->ReadReports(consumer, buf.data(), buf.size())) {
+         got > 0; got = eng->ReadReports(consumer, buf.data(), buf.size())) {
       collect(got);
     }
   });
@@ -247,8 +246,8 @@ int main(int argc, char** argv) {
   for (const std::uint64_t v : samples) {
     sum += v;
   }
-  const double mean = static_cast<double>(sum) /
-                      static_cast<double>(samples.size());
+  const double mean =
+      static_cast<double>(sum) / static_cast<double>(samples.size());
 
   std::printf("samples          : %zu\n", samples.size());
   std::printf("offered rate     : %llu orders/s%s\n",

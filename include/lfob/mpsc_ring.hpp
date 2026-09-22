@@ -15,13 +15,13 @@ namespace lfob {
 // Flat array of size CAPACITY index each holding a 'Slot'
 // Each 'Slot' holds a ready value and the payload
 // For each 'Slot' i in [0, CAPACITY - 1] if:
-// - Ready = i + (CAPACITY * n) where n in the cycle count i.e. how many times we have looped
-// This means 'Slot' is ready to be written to
+// - Ready = i + (CAPACITY * n) where n in the cycle count i.e. how many times
+// we have looped This means 'Slot' is ready to be written to
 // - Ready = (i + (CAPACITY * n)) + 1
 // This means it has been written to and is waiting to be read
 //
-// Each slot needs to be read only once, lossless, on a full ring we return false to the caller
-// applying backpressure
+// Each slot needs to be read only once, lossless, on a full ring we return
+// false to the caller applying backpressure
 
 template <typename T, std::size_t CAPACITY>
 class MpscRing {
@@ -31,7 +31,8 @@ class MpscRing {
 
  public:
   MpscRing() noexcept {
-    // Starting condition - for all m_buffer[i], ready must be set to i to indicate ready
+    // Starting condition - for all m_buffer[i], ready must be set to i to
+    // indicate ready
     for (auto i{0UZ}; i < CAPACITY; ++i) {
       SlotAt(i).ready.store(static_cast<SeqNum>(i), std::memory_order::relaxed);
     }
@@ -166,7 +167,6 @@ class MpscRing {
     std::atomic<SeqNum> ready;
     T payload{};
   };
-
 
   // ── unchecked accessors ────────────────────────────────────────────────
   // Every raw index into m_buffer funnels through here. The

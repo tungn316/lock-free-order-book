@@ -120,7 +120,8 @@ class OrderIndex {
     return static_cast<std::size_t>(x);
   }
 
-  [[nodiscard]] static bool CyclicIn(std::size_t i, std::size_t k,
+  [[nodiscard]] static bool CyclicIn(std::size_t i,
+                                     std::size_t k,
                                      std::size_t j) noexcept {
     return (i <= j) ? (i < k && k <= j) : (i < k || k <= j);
   }

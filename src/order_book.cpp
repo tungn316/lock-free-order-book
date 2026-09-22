@@ -56,10 +56,10 @@ void OrderBook::HandleNew(const OrderCommand& cmd) noexcept {
   const Quantity leaves{Match(cmd.side, cmd.price, cmd.quantity, cmd)};
 
   if (leaves > 0) {
-    if (cmd.tif == TimeInForce::DAY) {  // Sit passively in the order book waiting for a future counter party 
+    if (cmd.tif == TimeInForce::DAY) {  // Sit passively in the order book
+                                        // waiting for a future counter party
       Rest(cmd, leaves);
-    }
-    else {  // Whole order quantity cannot be filled so cancel
+    } else {  // Whole order quantity cannot be filled so cancel
       EmitAck(cmd, ExecutionReport::Type::CANCELLED, leaves);
     }
   }

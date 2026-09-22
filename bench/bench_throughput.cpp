@@ -93,12 +93,12 @@ std::vector<OrderCommand> BuildWorkload(std::size_t count) {
 void SubmitAll(MatchingEngine& eng, std::span<const OrderCommand> cmds) {
   std::size_t sent = 0;
   while (sent < cmds.size()) {
-    const std::size_t want =
-        std::min(k_push_chunk, cmds.size() - sent);
+    const std::size_t want = std::min(k_push_chunk, cmds.size() - sent);
     const std::size_t n = eng.SubmitBulk(cmds.data() + sent, want);
     sent += n;
     if (n < want) {
-      std::this_thread::yield();  // ingress full: let the matching thread catch up
+      std::this_thread::yield();  // ingress full: let the matching thread catch
+                                  // up
     }
   }
 }
@@ -111,8 +111,7 @@ int main(int argc, char** argv) {
   const int cpu_core = ParseArg<int>(argc, argv, 2, -1);
 
   if (num_orders > k_max_orders) {
-    std::fprintf(stderr,
-                 "num_orders %zu exceeds arena capacity %zu; capping\n",
+    std::fprintf(stderr, "num_orders %zu exceeds arena capacity %zu; capping\n",
                  num_orders, k_max_orders);
   }
   const std::size_t n = std::min(num_orders, k_max_orders);
@@ -120,8 +119,8 @@ int main(int argc, char** argv) {
   const std::vector<OrderCommand> cmds = BuildWorkload(n);
 
   // ~12 MB of inline ring buffers — too big for a stack local, must be heap.
-  auto eng = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                              cpu_core);
+  auto eng =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, cpu_core);
   const auto consumer = eng->RegisterOutputWorker();
 
   // Drain egress for the whole run so Emit() never wedges on a full ring.
@@ -143,8 +142,7 @@ int main(int argc, char** argv) {
     }
     // Final sweep: pick up anything emitted during Stop()'s drain.
     for (std::size_t got = eng->ReadReports(consumer, buf.data(), buf.size());
-         got > 0;
-         got = eng->ReadReports(consumer, buf.data(), buf.size())) {
+         got > 0; got = eng->ReadReports(consumer, buf.data(), buf.size())) {
       local += got;
     }
     reports_seen.store(local, std::memory_order::relaxed);

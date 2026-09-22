@@ -113,7 +113,8 @@ std::size_t ItchBodyBytes(ItchType type) noexcept {
 //   len < what the type needs    -> TRUNCATED       (short, can't read it)
 //   len > what the type needs    -> LENGTH_MISMATCH (framing disagrees)
 //   otherwise                    -> read the fields, OK
-DecodeStatus DecodeItch(const std::byte* bytes, std::size_t len,
+DecodeStatus DecodeItch(const std::byte* bytes,
+                        std::size_t len,
                         ItchMessage& out) noexcept {
   if (len == 0) {
     return DecodeStatus::TRUNCATED;  // not even a type byte
@@ -163,7 +164,8 @@ DecodeStatus DecodeItch(const std::byte* bytes, std::size_t len,
       break;
 
     default:
-      return DecodeStatus::UNKNOWN_TYPE;  // unreachable: expected > 0 gates this
+      return DecodeStatus::UNKNOWN_TYPE;  // unreachable: expected > 0 gates
+                                          // this
   }
 
   return DecodeStatus::OK;
@@ -176,7 +178,8 @@ namespace {
 // Every declared message (2-byte length prefix + body) must fit inside the
 // datagram. Returns false on the first overrun so the whole datagram can be
 // dropped rather than half-parsed
-bool FramingValid(const std::byte* datagram, std::size_t bytes,
+bool FramingValid(const std::byte* datagram,
+                  std::size_t bytes,
                   std::uint16_t count) noexcept {
   const std::byte* p{datagram + k_mold_header_bytes};
   const std::byte* const stop{datagram + bytes};
@@ -185,7 +188,8 @@ bool FramingValid(const std::byte* datagram, std::size_t bytes,
     if (before < k_mold_length_prefix_bytes) {
       return false;
     }
-    const std::size_t msg_len{ReadU16(p)};  // widen so comparisons stay unsigned
+    const std::size_t msg_len{
+        ReadU16(p)};  // widen so comparisons stay unsigned
     p += k_mold_length_prefix_bytes;
     const auto after{static_cast<std::size_t>(stop - p)};
     if (after < msg_len) {
@@ -199,7 +203,9 @@ bool FramingValid(const std::byte* datagram, std::size_t bytes,
 // Walk `count` length-prefixed messages starting at `body`, skipping the first
 // `skip` (already-seen duplicates), decoding and pushing the rest to the sink.
 // Assumes framing was already validated. Returns messages delivered
-std::size_t Deliver(ItchSink& sink, const std::byte* body, std::uint16_t count,
+std::size_t Deliver(ItchSink& sink,
+                    const std::byte* body,
+                    std::uint16_t count,
                     std::size_t skip) noexcept {
   const std::byte* p{body};
   std::size_t delivered{0};
@@ -224,14 +230,16 @@ std::size_t Deliver(ItchSink& sink, const std::byte* body, std::uint16_t count,
 
 MoldSession::MoldSession(ItchSink& sink) noexcept : m_sink(sink) {}
 
-bool MoldSession::ParseHeader(const std::byte* datagram, std::size_t bytes,
+bool MoldSession::ParseHeader(const std::byte* datagram,
+                              std::size_t bytes,
                               MoldHeader& out) noexcept {
   if (bytes < k_mold_header_bytes) {
     return false;
   }
   std::memcpy(out.session.data(), datagram, k_mold_session_bytes);
-  out.sequence = ReadU64(datagram + k_mold_session_bytes);          // offset 10
-  out.message_count = ReadU16(datagram + k_mold_session_bytes + 8);  // offset 18
+  out.sequence = ReadU64(datagram + k_mold_session_bytes);  // offset 10
+  out.message_count =
+      ReadU16(datagram + k_mold_session_bytes + 8);  // offset 18
   return true;
 }
 
@@ -241,8 +249,9 @@ bool MoldSession::ParseHeader(const std::byte* datagram, std::size_t bytes,
 // other feed:
 //
 //   datagram seqs:   [ first .............................. end )
-//   already seen:    [ first ... m_expected )                        <- skip these
-//   new tail:                   [ m_expected ................. end )  <- deliver these
+//   already seen:    [ first ... m_expected )                        <- skip
+//   these new tail:                   [ m_expected ................. end )  <-
+//   deliver these
 //                                 skip = m_expected - first
 //
 // The clean cases fall out of the same picture: end <= m_expected means the
@@ -287,7 +296,8 @@ std::size_t MoldSession::Reconcile(const MoldHeader& header) noexcept {
 //                     sets the stream)  messages to deliver)         (else drop
 //                                                                     whole)
 //                                                            │
-//                                        reconcile sequence ─┘  (gap? dup? skip N)
+//                                        reconcile sequence ─┘  (gap? dup? skip
+//                                        N)
 //                                                            │
 //                                              deliver the non-skipped tail
 //                                              through DecodeItch -> sink
@@ -334,9 +344,13 @@ std::size_t MoldSession::OnDatagram(const std::byte* datagram,
                  skip);
 }
 
-SeqNum MoldSession::Expected() const noexcept { return m_expected; }
+SeqNum MoldSession::Expected() const noexcept {
+  return m_expected;
+}
 
-bool MoldSession::InSession() const noexcept { return m_anchored; }
+bool MoldSession::InSession() const noexcept {
+  return m_anchored;
+}
 
 void MoldSession::Reset(SeqNum sequence) noexcept {
   // Re-anchor after recovery or a mid-day start: the next datagram is accepted
@@ -345,9 +359,15 @@ void MoldSession::Reset(SeqNum sequence) noexcept {
   m_anchored = true;
 }
 
-std::uint64_t MoldSession::Gaps() const noexcept { return m_gaps; }
-std::uint64_t MoldSession::Duplicates() const noexcept { return m_duplicates; }
-std::uint64_t MoldSession::Malformed() const noexcept { return m_malformed; }
+std::uint64_t MoldSession::Gaps() const noexcept {
+  return m_gaps;
+}
+std::uint64_t MoldSession::Duplicates() const noexcept {
+  return m_duplicates;
+}
+std::uint64_t MoldSession::Malformed() const noexcept {
+  return m_malformed;
+}
 
 // <---- Translation into engine commands ---->
 
@@ -368,7 +388,9 @@ void ItchTranslator::OnSystemEvent(const ItchMessage& msg) noexcept {
   }
 }
 
-bool ItchTranslator::Tradable() const noexcept { return m_open && !m_halted; }
+bool ItchTranslator::Tradable() const noexcept {
+  return m_open && !m_halted;
+}
 
 bool ItchTranslator::ToTicks(Price itch_price, Price& ticks) const noexcept {
   // ITCH prices are unsigned 1e-4 dollars. Fail rather than truncate onto the
@@ -380,8 +402,9 @@ bool ItchTranslator::ToTicks(Price itch_price, Price& ticks) const noexcept {
   return true;
 }
 
-ItchTranslator::Result ItchTranslator::TranslateAdd(const ItchMessage& msg,
-                                                    OrderCommand& out) noexcept {
+ItchTranslator::Result ItchTranslator::TranslateAdd(
+    const ItchMessage& msg,
+    OrderCommand& out) noexcept {
   if (msg.stock_locate != m_config.stock_locate) {
     return Result::FILTERED;  // a different symbol; the cheapest filter
   }
@@ -418,7 +441,8 @@ ItchTranslator::Result ItchTranslator::TranslateAdd(const ItchMessage& msg,
 }
 
 ItchTranslator::Result ItchTranslator::TranslateDelete(
-    const ItchMessage& msg, OrderCommand& out) noexcept {
+    const ItchMessage& msg,
+    OrderCommand& out) noexcept {
   if (msg.stock_locate != m_config.stock_locate) {
     return Result::FILTERED;
   }
@@ -439,7 +463,8 @@ ItchTranslator::Result ItchTranslator::TranslateDelete(
 }
 
 ItchTranslator::Result ItchTranslator::TranslateReplace(
-    const ItchMessage& msg, OrderCommand& out) noexcept {
+    const ItchMessage& msg,
+    OrderCommand& out) noexcept {
   // ORDER_REPLACE ('U') is not in the minimal decoded slice. Reported as
   // UNSUPPORTED until the decoder and this mapping are widened together
   (void)msg;
@@ -470,6 +495,8 @@ ItchTranslator::Result ItchTranslator::Translate(const ItchMessage& msg,
 std::uint64_t ItchTranslator::Unsupported() const noexcept {
   return m_unsupported;
 }
-std::uint64_t ItchTranslator::Rejected() const noexcept { return m_rejected; }
+std::uint64_t ItchTranslator::Rejected() const noexcept {
+  return m_rejected;
+}
 
 }  // namespace lfob

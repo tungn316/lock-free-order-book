@@ -34,9 +34,9 @@ namespace lfob {
 //    │                        │  (frames + de-dups, then calls us back)
 //    │                        ▼
 //    │                   OnMessage(msg) ─► ItchTranslator ─► stage OrderCommand
-//    │                   OnGap(...)      ─► m_stalled = true (stop trusting feed)
-//    │
-//    └─ FlushStaged()  SubmitBulk the staged commands to the engine's ingress
+//    │                   OnGap(...)      ─► m_stalled = true (stop trusting
+//    feed) │ └─ FlushStaged()  SubmitBulk the staged commands to the engine's
+//    ingress
 //
 // A gap is the scary case: UDP dropped a run of messages that the live feed
 // will never resend, so the book we are rebuilding is now wrong. We can't
@@ -94,13 +94,15 @@ class FeedHandler final : public ItchSink {
   MoldSession m_mold;
 
   int m_fd{-1};
-  bool m_stalled{false};  // OnGap sets it; stays set until recovery (not wired yet)
+  bool m_stalled{
+      false};  // OnGap sets it; stays set until recovery (not wired yet)
 
   // One receive buffer per datagram in a batch, so recvmmsg can drop a whole
   // burst into m_datagrams in a single syscall
   std::array<std::array<std::byte, k_mold_max_datagram>, k_datagram_batch>
       m_datagrams{};
-  std::array<OrderCommand, k_stage_batch> m_staging{};  // commands waiting on a flush
+  std::array<OrderCommand, k_stage_batch>
+      m_staging{};  // commands waiting on a flush
   std::size_t m_staged{0};
   std::jthread m_thread;
 

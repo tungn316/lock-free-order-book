@@ -14,7 +14,8 @@ inline constexpr std::size_t k_session_outbound_bytes{1U << 18U};  // 256 KiB
 // exactly one OutputWorker thread, so it needs no atomics: the "single
 // producer" is the worker, and the socket is the only consumer
 //
-// matching thread ──► SpmcRing ──► OutputWorker ──► OutboundBuffer ──► client socket
+// matching thread ──► SpmcRing ──► OutputWorker ──► OutboundBuffer ──► client
+// socket
 //                     └─ 2 ms budget ─┘             └─ 1 s / 256 KiB ─┘
 //                     "worker isn't reading"        "client isn't reading"
 //

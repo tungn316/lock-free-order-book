@@ -54,7 +54,9 @@ class NodeArena {
 
   // Same as operator[] but named to make my LSP happy
   [[nodiscard]] Order& Node(NodeIdx idx) noexcept { return NodeAt(idx); }
-  [[nodiscard]] const Order& Node(NodeIdx idx) const noexcept { return NodeAt(idx); }
+  [[nodiscard]] const Order& Node(NodeIdx idx) const noexcept {
+    return NodeAt(idx);
+  }
 
   // <---- CHECKED ACCESOSR ---->
   // return nullptr if idx is stale or out of range
@@ -68,9 +70,15 @@ class NodeArena {
     return nullptr;
   }
 
-  [[nodiscard]] Generation GenerationOf(NodeIdx idx) const noexcept { return GenAt(idx); }
-  [[nodiscard]] std::size_t Capacity() const noexcept { return (m_nodes.size()); }
-  [[nodiscard]] std::size_t InUse() const noexcept { return m_nodes.size() - m_free.size(); }
+  [[nodiscard]] Generation GenerationOf(NodeIdx idx) const noexcept {
+    return GenAt(idx);
+  }
+  [[nodiscard]] std::size_t Capacity() const noexcept {
+    return (m_nodes.size());
+  }
+  [[nodiscard]] std::size_t InUse() const noexcept {
+    return m_nodes.size() - m_free.size();
+  }
   [[nodiscard]] bool Exhausted() const noexcept { return m_free.empty(); }
 
  private:

@@ -144,8 +144,7 @@ TEST_CASE("register hands out distinct ids", "[spmc][single]") {
   }
 }
 
-TEST_CASE("LagOf and SizeApprox track the slowest consumer",
-          "[spmc][single]") {
+TEST_CASE("LagOf and SizeApprox track the slowest consumer", "[spmc][single]") {
   SpmcRing<int, 8> ring;
   auto a = ring.Register();
   auto b = ring.Register();
@@ -155,7 +154,8 @@ TEST_CASE("LagOf and SizeApprox track the slowest consumer",
   }
 
   std::array<int, 8> out{};
-  CHECK(ring.TryReadBulk(a, out.data(), 2) == 2);  // A advances to 2, B stays at 0
+  CHECK(ring.TryReadBulk(a, out.data(), 2) ==
+        2);  // A advances to 2, B stays at 0
 
   CHECK(ring.LagOf(a) == 3);
   CHECK(ring.LagOf(b) == 5);
@@ -300,8 +300,9 @@ TEST_CASE("rejoin resumes at the live edge, with no replay", "[spmc][evict]") {
   const auto epoch_before = ring.EpochOf(b);
   CHECK(ring.Rejoin(b));
   CHECK(ring.IsAttached(b));
-  CHECK(ring.EpochOf(b) > epoch_before);  // "attached again", not "still attached"
-  CHECK_FALSE(ring.Rejoin(b));            // already attached
+  CHECK(ring.EpochOf(b) >
+        epoch_before);          // "attached again", not "still attached"
+  CHECK_FALSE(ring.Rejoin(b));  // already attached
 
   // Everything published while detached is gone: that is what bounds recovery.
   CHECK(ring.TryReadBulk(b, out.data(), out.size()) == 0);
@@ -517,7 +518,8 @@ TEST_CASE("single producer, many consumers: full stream, in order, no loss",
       if (c % 2 == 0) {
         std::array<std::uint64_t, 64> buf{};
         while (got < k_total) {
-          const std::size_t n = ring.TryReadBulk(ids[c], buf.data(), buf.size());
+          const std::size_t n =
+              ring.TryReadBulk(ids[c], buf.data(), buf.size());
           for (std::size_t k = 0; k < n; ++k) {
             if (buf[k] != expected) {
               ok = false;

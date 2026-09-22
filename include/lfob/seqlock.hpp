@@ -28,8 +28,9 @@ class alignas(k_cache_line) Seqlock {
   Seqlock& operator=(Seqlock&&) = delete;
   ~Seqlock() = default;
 
-  // The fence ensures that we increment m_seq to odd before we start writing to m_value
-  // The store release promises if we acquire we have fully written to m_value
+  // The fence ensures that we increment m_seq to odd before we start writing to
+  // m_value The store release promises if we acquire we have fully written to
+  // m_value
   void Store(const T& value) noexcept {
     const SeqNum seq{m_seq.load(std::memory_order::relaxed)};
     m_seq.store(seq + 1, std::memory_order::relaxed);
@@ -41,15 +42,18 @@ class alignas(k_cache_line) Seqlock {
   }
 
   // The acquire load pairs with the writer's release store:
-  // - Observe an even seq, the promise is for this seq the CopyTo has fully completed before our CopyFrom
-  // - Nothing stopping a CopyTo right the second we accept an even seq, that is the reason for (seq0 == seq1)
-  // - The acquire fence ensures we don't load seq1 before we finish copying m_value
+  // - Observe an even seq, the promise is for this seq the CopyTo has fully
+  // completed before our CopyFrom
+  // - Nothing stopping a CopyTo right the second we accept an even seq, that is
+  // the reason for (seq0 == seq1)
+  // - The acquire fence ensures we don't load seq1 before we finish copying
+  // m_value
   [[nodiscard]] T Load() const noexcept {
     T value{};
     for (;;) {
       const SeqNum seq0{m_seq.load(std::memory_order::acquire)};
       if ((seq0 & 1U) != 0) {
-        CpuRelax(); // hint to processor that we are in spin-lock
+        CpuRelax();  // hint to processor that we are in spin-lock
         continue;
       }
       CopyFrom(&value);
@@ -58,7 +62,7 @@ class alignas(k_cache_line) Seqlock {
       if (seq0 == seq1) {
         return value;
       }
-      CpuRelax(); // hint to processor that we are in spin-lock
+      CpuRelax();  // hint to processor that we are in spin-lock
     }
   }
 
@@ -74,8 +78,8 @@ class alignas(k_cache_line) Seqlock {
   // and sizeof(T) need not be a multiple of 8, so a plain uint64 array bridges
   // the two via memcpy -- alias-safe, and zero-padding the ragged tail. Fewer
   // atomic ops than a byte-wise copy (sizeof(T)/8 vs sizeof(T)).
-  static constexpr std::size_t k_words{
-      (sizeof(T) + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t)};
+  static constexpr std::size_t k_words{(sizeof(T) + sizeof(std::uint64_t) - 1) /
+                                       sizeof(std::uint64_t)};
   alignas(T) std::array<std::atomic<std::uint64_t>, k_words> m_value{};
 
   void CopyTo(const T* src) noexcept {

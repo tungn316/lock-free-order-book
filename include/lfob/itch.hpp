@@ -44,12 +44,14 @@ namespace lfob {
 //
 // One datagram = a 20-byte header, then a run of length-prefixed messages:
 //
-//   ┌──────────────── header (20 bytes) ─────────────┐┌── msg 0 ──┐┌── msg 1 ──┐
-//   │ session (10) │ sequence (8) │ message count (2) ││ len │ ... ││ len │ ... │
+//   ┌──────────────── header (20 bytes) ─────────────┐┌── msg 0 ──┐┌── msg 1
+//   ──┐ │ session (10) │ sequence (8) │ message count (2) ││ len │ ... ││ len │
+//   ... │
 //   └──────────────┴──────┬───────┴───────────────────┘└─(2)─┴─────┘└─(2)─┴─────┘
 //                         │
 //                         └─ sequence of msg 0. msg 1 is sequence+1, and so on,
-//                            so the whole datagram covers [sequence, sequence+count)
+//                            so the whole datagram covers [sequence,
+//                            sequence+count)
 //
 // Each message carries its own 2-byte length in front, so we can walk them
 // without knowing any ITCH type -- handy, since we only decode a few of them.
@@ -75,7 +77,7 @@ inline constexpr std::size_t k_itch_max_message_bytes{64};
 
 struct MoldHeader {
   std::array<char, k_mold_session_bytes> session;
-  SeqNum sequence;         // sequence of the first message in this datagram
+  SeqNum sequence;  // sequence of the first message in this datagram
   std::uint16_t message_count;
 };
 
@@ -97,7 +99,7 @@ enum class ItchType : char {
   ORDER_CANCEL = 'X',  // partial cancel: reduce shares, keep priority
   ORDER_DELETE = 'D',
   ORDER_REPLACE = 'U',
-  TRADE = 'P',       // non-displayable execution, no book effect
+  TRADE = 'P',  // non-displayable execution, no book effect
   CROSS_TRADE = 'Q',
   BROKEN_TRADE = 'B',
 };
@@ -116,12 +118,12 @@ enum class ItchType : char {
 // for the types that carry them -- see the comments
 struct ItchMessage {
   ItchType type;
-  Side side;             // ADD_ORDER, ADD_ORDER_MPID ('B' -> BID, 'S' -> ASK)
-  bool printable;        // ORDER_EXECUTED_PRICE, TRADE
-  char event_code;       // SYSTEM_EVENT: 'O','S','Q','M','E','C'
-  char trading_state;    // TRADING_ACTION: 'H' halted, 'T' trading, ...
+  Side side;           // ADD_ORDER, ADD_ORDER_MPID ('B' -> BID, 'S' -> ASK)
+  bool printable;      // ORDER_EXECUTED_PRICE, TRADE
+  char event_code;     // SYSTEM_EVENT: 'O','S','Q','M','E','C'
+  char trading_state;  // TRADING_ACTION: 'H' halted, 'T' trading, ...
 
-  std::uint16_t stock_locate;      // symbol handle; the only filter that is free
+  std::uint16_t stock_locate;  // symbol handle; the only filter that is free
   std::uint16_t tracking_number;
 
   // Nanoseconds since midnight Eastern, widened from the 48-bit wire field.
@@ -132,8 +134,8 @@ struct ItchMessage {
   OrderId original_reference;  // ORDER_REPLACE: the order being replaced
   OrderId match_number;        // execution / trade id
 
-  Quantity shares;   // ADD_*, ORDER_EXECUTED*, ORDER_CANCEL (cancelled qty)
-  Price price;       // raw ITCH price: 1/10000 of a dollar, NOT engine ticks
+  Quantity shares;  // ADD_*, ORDER_EXECUTED*, ORDER_CANCEL (cancelled qty)
+  Price price;      // raw ITCH price: 1/10000 of a dollar, NOT engine ticks
 
   std::array<char, 8> stock;  // space-padded, not NUL-terminated
 };
@@ -183,10 +185,10 @@ class ItchSink {
 //
 //      first < m_expected        first == m_expected        first > m_expected
 //   ┌────────────────────┐    ┌────────────────────┐    ┌────────────────────┐
-//   │ already seen it     │    │ bang on -- deliver  │    │ GAP: the messages   │
-//   │ (the other A/B      │    │ every message and   │    │ [m_expected, first) │
-//   │  feed) -> skip it   │    │ bump m_expected by  │    │ never showed up     │
-//   │  as a duplicate     │    │ the message count   │    │ -> raise OnGap       │
+//   │ already seen it     │    │ bang on -- deliver  │    │ GAP: the messages │
+//   │ (the other A/B      │    │ every message and   │    │ [m_expected, first)
+//   │ │  feed) -> skip it   │    │ bump m_expected by  │    │ never showed up │
+//   │  as a duplicate     │    │ the message count   │    │ -> raise OnGap │
 //   └────────────────────┘    └────────────────────┘    └────────────────────┘
 //
 // The A/B thing: the exchange sends two identical copies of the feed down
@@ -247,8 +249,9 @@ class MoldSession {
 // translator has to decide what we are using the feed for:
 //
 //   BOOK_REBUILD    keep a book identical to NASDAQ's by replaying the maker
-//                   side only:  A/F rest,  D cancels,  U replaces,  E/C/X reduce.
-//                   Nothing ever crosses, so our own matching never runs
+//                   side only:  A/F rest,  D cancels,  U replaces,  E/C/X
+//                   reduce. Nothing ever crosses, so our own matching never
+//                   runs
 //   SYNTHETIC_FLOW  ignore the maker stream, treat the feed as pure market data
 //                   and drive the engine with our own orders priced off it.
 //                   This is the mode that actually exercises matching
@@ -261,8 +264,8 @@ class MoldSession {
 //   │ ORDER_DELETE 'D' │───────►│ tick + band    │───────►│ CANCEL (by id)│
 //   │ SYSTEM_EVENT 'S' │───────►│ open/halt state│──X      (no command)   │
 //   └──────────────────┘        └────────────────┘
-//                                      │  everything else -> FILTERED / rejected
-//                                      ▼
+//                                      │  everything else -> FILTERED /
+//                                      rejected ▼
 //   the ITCH order reference number becomes the engine order id, so a later
 //   DELETE lines up with the ADD that created the order
 enum class ReplayMode : std::uint8_t { BOOK_REBUILD, SYNTHETIC_FLOW };
@@ -288,12 +291,12 @@ class ItchTranslator {
   ItchTranslator& operator=(ItchTranslator&&) = delete;
 
   enum class Result : std::uint8_t {
-    COMMAND,       // `out` is filled and ready for MatchingEngine::Submit
-    FILTERED,      // different symbol, or a type with no book effect
-    HALTED,        // symbol is not in a trading state right now
-    OUT_OF_BAND,   // price outside [min_price, max_price] after scaling
-    NOT_ON_TICK,   // price is not a whole number of engine ticks
-    UNSUPPORTED,   // no faithful mapping exists -- see below
+    COMMAND,      // `out` is filled and ready for MatchingEngine::Submit
+    FILTERED,     // different symbol, or a type with no book effect
+    HALTED,       // symbol is not in a trading state right now
+    OUT_OF_BAND,  // price outside [min_price, max_price] after scaling
+    NOT_ON_TICK,  // price is not a whole number of engine ticks
+    UNSUPPORTED,  // no faithful mapping exists -- see below
   };
 
   // ORDER_CANCEL ('X') is the honest gap: it reduces a resting order's shares
@@ -324,8 +327,8 @@ class ItchTranslator {
   Result TranslateReplace(const ItchMessage& msg, OrderCommand& out) noexcept;
 
   Config m_config;
-  bool m_open{false};       // between the 'Q' and 'M' system events
-  bool m_halted{false};     // per-symbol trading action
+  bool m_open{false};    // between the 'Q' and 'M' system events
+  bool m_halted{false};  // per-symbol trading action
   std::uint64_t m_unsupported{0};
   std::uint64_t m_rejected{0};
 };

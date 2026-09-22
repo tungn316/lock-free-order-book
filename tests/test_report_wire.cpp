@@ -26,15 +26,19 @@ ExecutionReport MakeReport(ExecutionReport::Type type) {
 
 TEST_CASE("RouteOf classifies each report type", "[report_wire]") {
   CHECK(RouteOf(MakeReport(ExecutionReport::Type::FILL)) == Route::BOTH);
-  CHECK(RouteOf(MakeReport(ExecutionReport::Type::TOP_OF_BOOK)) == Route::PUBLIC);
+  CHECK(RouteOf(MakeReport(ExecutionReport::Type::TOP_OF_BOOK)) ==
+        Route::PUBLIC);
   CHECK(RouteOf(MakeReport(ExecutionReport::Type::ACCEPTED)) == Route::PRIVATE);
   CHECK(RouteOf(MakeReport(ExecutionReport::Type::REJECTED)) == Route::PRIVATE);
-  CHECK(RouteOf(MakeReport(ExecutionReport::Type::CANCELLED)) == Route::PRIVATE);
+  CHECK(RouteOf(MakeReport(ExecutionReport::Type::CANCELLED)) ==
+        Route::PRIVATE);
   CHECK(RouteOf(MakeReport(ExecutionReport::Type::REPLACED)) == Route::PRIVATE);
-  CHECK(RouteOf(MakeReport(ExecutionReport::Type::GAP_NOTICE)) == Route::PRIVATE);
+  CHECK(RouteOf(MakeReport(ExecutionReport::Type::GAP_NOTICE)) ==
+        Route::PRIVATE);
 }
 
-TEST_CASE("EncodeReport writes the whole report when it fits", "[report_wire]") {
+TEST_CASE("EncodeReport writes the whole report when it fits",
+          "[report_wire]") {
   const auto report{MakeReport(ExecutionReport::Type::FILL)};
   std::array<std::byte, sizeof(ExecutionReport)> out{};
 
@@ -53,7 +57,8 @@ TEST_CASE("EncodeReport refuses a buffer that is too small", "[report_wire]") {
 TEST_CASE("EncodeReport round-trips through a decode", "[report_wire]") {
   const auto report{MakeReport(ExecutionReport::Type::ACCEPTED)};
   std::array<std::byte, sizeof(ExecutionReport)> out{};
-  REQUIRE(EncodeReport(report, out.data(), out.size()) == sizeof(ExecutionReport));
+  REQUIRE(EncodeReport(report, out.data(), out.size()) ==
+          sizeof(ExecutionReport));
 
   ExecutionReport decoded{};
   std::memcpy(&decoded, out.data(), sizeof(decoded));

@@ -1,7 +1,7 @@
-#include <lfob/matching_engine.hpp>
+#include <lfob/cpu_relax.h>
 #include <lfob/affinity.hpp>
 #include <lfob/clock.hpp>
-#include <lfob/cpu_relax.h>
+#include <lfob/matching_engine.hpp>
 
 #include <algorithm>
 #include <array>
@@ -34,7 +34,7 @@ std::size_t MatchingEngine::SubmitBulk(const OrderCommand* cmds,
                                        std::size_t count) noexcept {
   // Each command needs its ingress_ts stamped. Since cmds is
   // const and TryPushBulk needs a contiguous, writable buffer,
-  // copy through a bounded on-stack staging buffer in chunks: 
+  // copy through a bounded on-stack staging buffer in chunks:
   // - doesn't mutate the caller's array
   // - doesn't allocate
   std::array<OrderCommand, k_stage_batch> staged{};
@@ -112,7 +112,8 @@ void MatchingEngine::PrepareMemory() noexcept {
 }
 
 // Runs on matching thread:
-// - Scheduling class and CPU affinity are per-thread, so they cannot be set from Start()
+// - Scheduling class and CPU affinity are per-thread, so they cannot be set
+// from Start()
 // - Pin first so the thread stops migrating
 // - Lift into SCHED_FIFO above the normal-class threads
 void MatchingEngine::ConfigureThread() const noexcept {
@@ -141,7 +142,7 @@ void MatchingEngine::Run(const std::stop_token& stop) {
     const std::size_t n{Poll()};
     m_spin_iterations.fetch_add(1, std::memory_order::relaxed);
     if (n == 0) {
-      CpuRelax(); // hint to processor that we are in spin-lock 
+      CpuRelax();  // hint to processor that we are in spin-lock
     }
   }
 
@@ -157,8 +158,8 @@ std::size_t MatchingEngine::Poll() noexcept {
     m_book.Apply(batch.at(i));
   }
 
-  // Drain synthetic reports (e.g. backpressure rejects the I/O threads could not
-  // deliver themselves). Publishing here is what keeps the egress ring
+  // Drain synthetic reports (e.g. backpressure rejects the I/O threads could
+  // not deliver themselves). Publishing here is what keeps the egress ring
   // single-producer: only this thread ever emits. The book stamps each with the
   // next egress sequence, so the injected reports slot cleanly into the stream
   std::size_t injected{0};

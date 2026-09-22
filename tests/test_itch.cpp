@@ -36,20 +36,22 @@ std::vector<std::byte> SystemEvent(char event_code) {
 }
 
 // Build a well-formed Add Order ('A', 36 bytes)
-std::vector<std::byte> AddOrder(std::uint64_t ref, char side, std::uint32_t shares,
+std::vector<std::byte> AddOrder(std::uint64_t ref,
+                                char side,
+                                std::uint32_t shares,
                                 std::uint32_t price) {
   std::vector<std::byte> m;
   PutChar(m, 'A');
-  PutBE(m, 42, 2);          // stock locate
-  PutBE(m, 1, 2);           // tracking number
-  PutBE(m, 999, 6);         // timestamp
-  PutBE(m, ref, 8);         // order reference
-  PutChar(m, side);         // buy/sell
-  PutBE(m, shares, 4);      // shares
+  PutBE(m, 42, 2);      // stock locate
+  PutBE(m, 1, 2);       // tracking number
+  PutBE(m, 999, 6);     // timestamp
+  PutBE(m, ref, 8);     // order reference
+  PutChar(m, side);     // buy/sell
+  PutBE(m, shares, 4);  // shares
   for (int i = 0; i < 8; ++i) {
     PutChar(m, "AAPL    "[i]);  // stock, space-padded
   }
-  PutBE(m, price, 4);       // price
+  PutBE(m, price, 4);  // price
   return m;
 }
 
@@ -65,8 +67,10 @@ std::vector<std::byte> OrderDelete(std::uint64_t ref) {
 }
 
 // Build an Add Order with MPID ('F', 40 bytes): 'A' plus a trailing 4-byte MPID
-std::vector<std::byte> AddOrderMpid(std::uint64_t ref, char side,
-                                    std::uint32_t shares, std::uint32_t price) {
+std::vector<std::byte> AddOrderMpid(std::uint64_t ref,
+                                    char side,
+                                    std::uint32_t shares,
+                                    std::uint32_t price) {
   std::vector<std::byte> m;
   PutChar(m, 'F');
   PutBE(m, 42, 2);
@@ -95,8 +99,8 @@ std::vector<std::byte> TradingAction(char state) {
   for (int i = 0; i < 8; ++i) {
     PutChar(m, "AAPL    "[i]);
   }
-  PutChar(m, state);   // trading state @ offset 19
-  PutBE(m, 0, 5);      // reserved (1) + reason (4)
+  PutChar(m, state);  // trading state @ offset 19
+  PutBE(m, 0, 5);     // reserved (1) + reason (4)
   return m;
 }
 
@@ -135,7 +139,8 @@ TEST_CASE("DecodeItch reads an add order with all fields", "[itch]") {
   CHECK(out.side == Side::BID);
   CHECK(out.shares == 500);
   CHECK(out.price == 101500);
-  CHECK(out.stock == std::array<char, 8>{'A', 'A', 'P', 'L', ' ', ' ', ' ', ' '});
+  CHECK(out.stock ==
+        std::array<char, 8>{'A', 'A', 'P', 'L', ' ', ' ', ' ', ' '});
 }
 
 TEST_CASE("DecodeItch maps buy/sell to side", "[itch]") {
@@ -214,7 +219,9 @@ constexpr char kSess[]{"SESSION001"};  // 10 chars + NUL
 struct RecordingSink : ItchSink {
   std::vector<ItchMessage> messages;
   std::vector<std::pair<SeqNum, SeqNum>> gaps;
-  void OnMessage(const ItchMessage& m) noexcept override { messages.push_back(m); }
+  void OnMessage(const ItchMessage& m) noexcept override {
+    messages.push_back(m);
+  }
   void OnGap(SeqNum expected, SeqNum received) noexcept override {
     gaps.emplace_back(expected, received);
   }
@@ -222,8 +229,10 @@ struct RecordingSink : ItchSink {
 
 // Build a MoldUDP64 datagram: 10-byte session, 8-byte sequence, 2-byte count,
 // then each message as a 2-byte length prefix + body
-std::vector<std::byte> Datagram(SeqNum seq, std::uint16_t count,
-                                const std::vector<std::vector<std::byte>>& msgs) {
+std::vector<std::byte> Datagram(
+    SeqNum seq,
+    std::uint16_t count,
+    const std::vector<std::vector<std::byte>>& msgs) {
   std::vector<std::byte> d;
   for (std::size_t i{0}; i < 10; ++i) {
     PutChar(d, kSess[i]);
@@ -241,7 +250,8 @@ std::vector<std::byte> Datagram(SeqNum seq, std::uint16_t count,
 
 }  // namespace
 
-TEST_CASE("MoldSession anchors on the first datagram and delivers", "[itch][mold]") {
+TEST_CASE("MoldSession anchors on the first datagram and delivers",
+          "[itch][mold]") {
   RecordingSink sink;
   MoldSession mold{sink};
 
@@ -277,7 +287,8 @@ TEST_CASE("MoldSession drops a fully duplicate datagram", "[itch][mold]") {
 
   const auto d{Datagram(1, 2, {AddOrder(1, 'B', 10, 100), OrderDelete(1)})};
   mold.OnDatagram(d.data(), d.size());
-  const std::size_t n{mold.OnDatagram(d.data(), d.size())};  // replayed A/B feed
+  const std::size_t n{
+      mold.OnDatagram(d.data(), d.size())};  // replayed A/B feed
 
   CHECK(n == 0);
   CHECK(sink.messages.size() == 2);  // no re-delivery
@@ -297,7 +308,7 @@ TEST_CASE("MoldSession delivers only the new tail of a partial duplicate",
   const auto d2{Datagram(2, 2, {OrderDelete(2), AddOrder(3, 'S', 5, 200)})};
   const std::size_t n{mold.OnDatagram(d2.data(), d2.size())};
 
-  CHECK(n == 1);                       // only the seq-3 message
+  CHECK(n == 1);  // only the seq-3 message
   CHECK(sink.messages.size() == 3);
   CHECK(mold.Duplicates() == 1);
   CHECK(mold.Expected() == 4);
@@ -321,7 +332,8 @@ TEST_CASE("MoldSession reports a gap and re-anchors", "[itch][mold]") {
   CHECK(mold.Expected() == 6);  // re-anchored past the gap
 }
 
-TEST_CASE("MoldSession treats a heartbeat as gap-detection only", "[itch][mold]") {
+TEST_CASE("MoldSession treats a heartbeat as gap-detection only",
+          "[itch][mold]") {
   RecordingSink sink;
   MoldSession mold{sink};
 
@@ -447,7 +459,8 @@ TEST_CASE("Translate maps an add order to a NEW command", "[itch][xlate]") {
   CHECK(out.quantity == 300);
 }
 
-TEST_CASE("Translate maps an order delete to a CANCEL command", "[itch][xlate]") {
+TEST_CASE("Translate maps an order delete to a CANCEL command",
+          "[itch][xlate]") {
   ItchTranslator xlate{TranslatorConfig()};
   ItchMessage msg{Msg(ItchType::ORDER_DELETE)};
   msg.reference = 777;
@@ -489,7 +502,8 @@ TEST_CASE("Translate rejects a price out of band", "[itch][xlate]") {
   CHECK(xlate.Rejected() == 1);
 }
 
-TEST_CASE("Translate tracks market open/close via system events", "[itch][xlate]") {
+TEST_CASE("Translate tracks market open/close via system events",
+          "[itch][xlate]") {
   ItchTranslator xlate{TranslatorConfig()};
   CHECK_FALSE(xlate.Tradable());  // not open until 'Q'
 

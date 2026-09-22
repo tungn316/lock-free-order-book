@@ -1,11 +1,12 @@
 #include <lfob/outbound_buffer.hpp>
 
-#include <cstring>
 #include <sys/uio.h>
+#include <cstring>
 
 namespace lfob {
 
-bool OutboundBuffer::TryAppend(const std::byte* frame, std::size_t bytes) noexcept {
+bool OutboundBuffer::TryAppend(const std::byte* frame,
+                               std::size_t bytes) noexcept {
   if (bytes > Free()) {
     return false;
   }
@@ -59,14 +60,20 @@ std::size_t OutboundBuffer::FlushTo(int fd) noexcept {
   return static_cast<std::size_t>(n);
 }
 
-std::size_t OutboundBuffer::Pending() const noexcept { return m_tail - m_head; }
+std::size_t OutboundBuffer::Pending() const noexcept {
+  return m_tail - m_head;
+}
 
 std::size_t OutboundBuffer::Free() const noexcept {
   return k_session_outbound_bytes - (m_tail - m_head);
 }
 
-bool OutboundBuffer::Empty() const noexcept { return m_tail == m_head; }
+bool OutboundBuffer::Empty() const noexcept {
+  return m_tail == m_head;
+}
 
-void OutboundBuffer::Clear() noexcept { m_head = m_tail; }
+void OutboundBuffer::Clear() noexcept {
+  m_head = m_tail;
+}
 
 }  // namespace lfob

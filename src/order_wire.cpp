@@ -2,7 +2,8 @@
 
 namespace lfob {
 
-bool DecodeOrder(const WireOrder& wire, ClientId client,
+bool DecodeOrder(const WireOrder& wire,
+                 ClientId client,
                  OrderCommand& out) noexcept {
   // The enums are contiguous from 0, so a single upper-bound check per field
   // rejects any value that would be an out-of-range (UB) cast

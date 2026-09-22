@@ -83,17 +83,16 @@ struct Cmd {
 // collected or the deadline passes. Returns everything seen so far. The engine
 // is asynchronous, so callers assert on the returned log rather than assuming
 // a report is ready the instant Submit returns.
-std::vector<ExecutionReport> Drain(MatchingEngine& eng,
-                                   MatchingEngine::ConsumerId id,
-                                   std::size_t want,
-                                   std::chrono::milliseconds timeout =
-                                       std::chrono::milliseconds(2000)) {
+std::vector<ExecutionReport> Drain(
+    MatchingEngine& eng,
+    MatchingEngine::ConsumerId id,
+    std::size_t want,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
   std::vector<ExecutionReport> log;
   std::array<ExecutionReport, 64> buf{};
   const auto deadline = std::chrono::steady_clock::now() + timeout;
 
-  while (log.size() < want &&
-         std::chrono::steady_clock::now() < deadline) {
+  while (log.size() < want && std::chrono::steady_clock::now() < deadline) {
     const std::size_t n = eng.ReadReports(id, buf.data(), buf.size());
     for (std::size_t i = 0; i < n; ++i) {
       log.push_back(buf.at(i));
@@ -129,10 +128,10 @@ std::optional<ExecutionReport> Last(const std::vector<ExecutionReport>& log,
 }
 
 // Spin until GetBbo reflects the expected bid, or the deadline passes.
-Bbo WaitForBid(MatchingEngine& eng,
-               Price want_bid,
-               std::chrono::milliseconds timeout =
-                   std::chrono::milliseconds(2000)) {
+Bbo WaitForBid(
+    MatchingEngine& eng,
+    Price want_bid,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
   Bbo bbo = eng.GetBbo();
   while (bbo.bid_price != want_bid &&
@@ -144,10 +143,10 @@ Bbo WaitForBid(MatchingEngine& eng,
 }
 
 // Spin until GetBbo reflects the expected ask, or the deadline passes.
-Bbo WaitForAsk(MatchingEngine& eng,
-               Price want_ask,
-               std::chrono::milliseconds timeout =
-                   std::chrono::milliseconds(2000)) {
+Bbo WaitForAsk(
+    MatchingEngine& eng,
+    Price want_ask,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
   Bbo bbo = eng.GetBbo();
   while (bbo.ask_price != want_ask &&
@@ -167,8 +166,8 @@ TEST_CASE("engine constructs, starts, and stops cleanly",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   eng.Start();
   eng.Stop();
@@ -179,11 +178,11 @@ TEST_CASE("destructor stops the matching thread without an explicit Stop",
           "[engine][lifecycle]") {
   {
     // ~12 MB of inline ring buffers: too large for the thread stack, so it must
-  // live on the heap (as it would in production). A stack local here overflows
-  // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
-  auto& eng = *eng_ptr;
+    // live on the heap (as it would in production). A stack local here
+    // overflows and SIGSEGVs before Start() ever runs.
+    auto eng_ptr =
+        std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
+    auto& eng = *eng_ptr;
     eng.Start();
     // Leaving scope must join the thread via the destructor.
   }
@@ -194,8 +193,8 @@ TEST_CASE("Stop is idempotent", "[engine][lifecycle]") {
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   eng.Start();
   eng.Stop();
@@ -210,8 +209,8 @@ TEST_CASE("a resting order flows through to a TopOfBook report",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();
@@ -232,8 +231,8 @@ TEST_CASE("GetBbo publishes the top of book to reader threads",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   eng.Start();
 
@@ -256,8 +255,8 @@ TEST_CASE("SubmitBulk pushes every command through the pipeline",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();
@@ -285,8 +284,8 @@ TEST_CASE("aggressive order matches a resting order and emits fills",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();
@@ -317,8 +316,8 @@ TEST_CASE("cancel flows through and clears the book", "[engine][cancel]") {
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();
@@ -346,8 +345,8 @@ TEST_CASE("an invalid command surfaces a REJECTED report", "[engine][reject]") {
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();
@@ -367,8 +366,8 @@ TEST_CASE("two output workers each receive the full report stream",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto a = eng.RegisterOutputWorker();
   const auto b = eng.RegisterOutputWorker();
@@ -392,8 +391,8 @@ TEST_CASE("Stop drains commands still queued at shutdown",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();
@@ -418,8 +417,8 @@ TEST_CASE("Stop drains commands still queued at shutdown",
 
 TEST_CASE("a wedged output worker is evicted instead of stalling the book",
           "[engine][egress][evict]") {
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
 
   const auto live = eng.RegisterOutputWorker();
@@ -461,7 +460,8 @@ TEST_CASE("a wedged output worker is evicted instead of stalling the book",
       std::chrono::steady_clock::now() + std::chrono::seconds(20);
   std::size_t sent = 0;
   while (sent < k_orders && std::chrono::steady_clock::now() < deadline) {
-    if (eng.Submit(*Cmd::New(static_cast<OrderId>(sent + 1), Side::ASK, 500, 1))) {
+    if (eng.Submit(
+            *Cmd::New(static_cast<OrderId>(sent + 1), Side::ASK, 500, 1))) {
       ++sent;
     }
   }
@@ -507,8 +507,8 @@ TEST_CASE("egress reports carry strictly increasing seq numbers",
   // ~12 MB of inline ring buffers: too large for the thread stack, so it must
   // live on the heap (as it would in production). A stack local here overflows
   // and SIGSEGVs before Start() ever runs.
-  auto eng_ptr = std::make_unique<MatchingEngine>(k_min_price, k_max_price,
-                                                  k_no_pin);
+  auto eng_ptr =
+      std::make_unique<MatchingEngine>(k_min_price, k_max_price, k_no_pin);
   auto& eng = *eng_ptr;
   const auto id = eng.RegisterOutputWorker();
   eng.Start();

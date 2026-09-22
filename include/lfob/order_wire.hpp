@@ -11,8 +11,8 @@ namespace lfob {
 // Fixed-size inbound wire record: what a client sends per order. Raw-POD and
 // host-order, symmetric with the egress report encoding -- both ends share this
 // struct. The enum-valued fields travel as raw bytes so an arbitrary value off
-// the wire never becomes an out-of-range (UB) scoped enum; DecodeOrder validates
-// them before mapping.
+// the wire never becomes an out-of-range (UB) scoped enum; DecodeOrder
+// validates them before mapping.
 struct WireOrder {
   std::uint8_t type;   // OrderCommand::Type: 0 NEW, 1 CANCEL, 2 REPLACE
   std::uint8_t side;   // Side: 0 BID, 1 ASK
@@ -30,7 +30,8 @@ static_assert(std::is_trivially_copyable_v<WireOrder>);
 // cannot spoof another. ingress_ts is left 0 (the engine stamps it on submit).
 // Returns false if any enum-valued field is out of range, which the caller
 // treats as a protocol violation.
-[[nodiscard]] bool DecodeOrder(const WireOrder& wire, ClientId client,
+[[nodiscard]] bool DecodeOrder(const WireOrder& wire,
+                               ClientId client,
                                OrderCommand& out) noexcept;
 
 }  // namespace lfob

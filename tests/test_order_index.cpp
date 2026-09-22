@@ -12,7 +12,9 @@ using namespace lfob;
 
 namespace {
 
-NodeRef Ref(NodeIdx idx, Generation gen = 0) { return NodeRef{.idx = idx, .gen = gen}; }
+NodeRef Ref(NodeIdx idx, Generation gen = 0) {
+  return NodeRef{.idx = idx, .gen = gen};
+}
 
 bool Same(const NodeRef* got, NodeRef want) {
   return got != nullptr && got->idx == want.idx && got->gen == want.gen;
@@ -48,7 +50,8 @@ TEST_CASE("OrderId 0 is a normal key (empty is encoded in the ref, not the id)",
   CHECK(idx.Size() == 0);
 }
 
-TEST_CASE("Put on an existing id overwrites without growing", "[index][single]") {
+TEST_CASE("Put on an existing id overwrites without growing",
+          "[index][single]") {
   OrderIndex idx(16);
   idx.Put(42, Ref(7));
   idx.Put(42, Ref(9, 1));
@@ -74,9 +77,10 @@ TEST_CASE("Erase of an absent key is a no-op", "[index][single]") {
 
 // ── probe chains / backward-shift ───────────────────────────────────────────
 
-TEST_CASE("colliding keys all remain findable, and erasing a middle one keeps "
-          "the rest reachable",
-          "[index][probe]") {
+TEST_CASE(
+    "colliding keys all remain findable, and erasing a middle one keeps "
+    "the rest reachable",
+    "[index][probe]") {
   // Small capacity -> small table (next pow2 >= 2*cap). Many keys guarantee
   // long probe chains, exercising the backward-shift path on Erase.
   constexpr std::size_t k_cap = 32;
@@ -133,8 +137,8 @@ TEST_CASE("random Put/Erase churn matches a std::unordered_map oracle",
 
   Generation gen = 0;
   for (int step = 0; step < 200'000; ++step) {
-    const bool do_put = oracle.empty() ||
-                        (oracle.size() < k_cap && (rng() & 1U) != 0U);
+    const bool do_put =
+        oracle.empty() || (oracle.size() < k_cap && (rng() & 1U) != 0U);
     if (do_put) {
       const OrderId id = key(rng);
       const NodeRef r = Ref(static_cast<NodeIdx>(rng() % k_cap), ++gen);

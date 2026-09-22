@@ -108,10 +108,10 @@ class MatchingEngine final : public ReportSink {
   void Emit(const ExecutionReport& report) override;  // matching thread only
 
  private:
-  void PrepareMemory() noexcept;   // lock + prefault, before the thread starts
+  void PrepareMemory() noexcept;  // lock + prefault, before the thread starts
   void ConfigureThread() const noexcept;  // pin + priority, on the thread
   void Run(const std::stop_token& stop);  // pin, then spin forever
-  std::size_t Poll() noexcept;     // drain <= kDrainBatch, apply each
+  std::size_t Poll() noexcept;            // drain <= kDrainBatch, apply each
 
   // Emit's slow path: block on a full egress ring, but only for a bounded
   // grace period per lagging worker

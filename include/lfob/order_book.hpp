@@ -66,7 +66,8 @@ class OrderBook {
                  const OrderCommand& cmd) noexcept;
 
   // Dry-run pass for FOK - can quantity fill at limit
-  [[nodiscard]] bool Fillable(Side taker_side, Price limit,
+  [[nodiscard]] bool Fillable(Side taker_side,
+                              Price limit,
                               Quantity quantity) const noexcept;
 
   void Rest(const OrderCommand& cmd, Quantity leaves) noexcept;

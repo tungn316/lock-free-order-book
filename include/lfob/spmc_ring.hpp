@@ -17,7 +17,8 @@ namespace lfob {
 // Single Producer Multi Consumer Broadcast Ring
 //
 // Every registered consumer observes every item. The producer publishes a
-// single monotonically increasing sequence, each consumer reads with it's own cursor.
+// single monotonically increasing sequence, each consumer reads with it's own
+// cursor.
 //
 // Delivery is lossless with back-pressure. The producer may not overwrite a
 // slot until the slowest registered consumer has moved past it, so TryPush
@@ -124,7 +125,8 @@ class SpmcRing {
     const SeqNum seq{m_produced.load(std::memory_order::relaxed)};
 
     std::size_t headroom{Headroom(seq)};
-    // Only if the worst case scenario doesn't have enough space we reload m_gate_cache
+    // Only if the worst case scenario doesn't have enough space we reload
+    // m_gate_cache
     if (count > headroom) {
       m_gate_cache = MinCursor(seq);
       headroom = Headroom(seq);
@@ -345,7 +347,8 @@ class SpmcRing {
 
   // Cursor as the producer's gate sees it: k_cursor_parked for a cell that is
   // detached or mid-rejoin, so it never pins the gate
-  [[nodiscard]] SeqNum ActiveCursor(std::size_t i, SeqNum fallback) const noexcept {
+  [[nodiscard]] SeqNum ActiveCursor(std::size_t i,
+                                    SeqNum fallback) const noexcept {
     if (!Attached(EpochAt(i).load(std::memory_order::acquire))) {
       return fallback;
     }
@@ -386,8 +389,7 @@ class SpmcRing {
   // ordering is unchanged -- these relaxed accesses still sit inside the
   // happens-before established by the m_produced release/acquire and the gate.
   struct alignas(k_cache_line) Slot {
-    static constexpr std::size_t k_words{
-        (sizeof(T) + (8 - 1)) / 8};
+    static constexpr std::size_t k_words{(sizeof(T) + (8 - 1)) / 8};
     std::array<std::atomic<std::uint64_t>, k_words> words{};
 
     void Store(const T& value) noexcept {
@@ -454,11 +456,11 @@ class SpmcRing {
   alignas(k_cache_line) std::array<CursorCell, MAX_CONSUMERS> m_cursors{};
 
   // Padded slots so a producer store to slot k never shares a line with a
-  // consumer load from slot k-1. Storing to slot k dirties the entire cache line
-  // meaning consumers must reload the cache just to read unchanged bytes
+  // consumer load from slot k-1. Storing to slot k dirties the entire cache
+  // line meaning consumers must reload the cache just to read unchanged bytes
   //
-  // Every slot line is pulled into all N reader caches so not good so up to N dirtied caches
-  // every write
+  // Every slot line is pulled into all N reader caches so not good so up to N
+  // dirtied caches every write
   alignas(k_cache_line) std::array<Slot, CAPACITY> m_buffer{};
 };
 

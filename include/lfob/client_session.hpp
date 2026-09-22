@@ -60,7 +60,8 @@ class ClientSession {
 
   // --- Gap recovery by the owning worker ---
   // - announce the discontinuity
-  // - then re-prime the client with a snapshot so it can resume from a known state
+  // - then re-prime the client with a snapshot so it can resume from a known
+  // state
   //  Only after both land does the session go back to ACTIVE
   [[nodiscard]] bool NeedsResync() const noexcept;
   bool SendGapNotice(SeqNum resume_seq) noexcept;
@@ -73,7 +74,8 @@ class ClientSession {
   // ever touches the inbound buffer, so like m_out it needs no synchronization
   enum class FillResult : std::uint8_t {
     GOT_DATA,     // read some bytes; there may be more on the socket
-    WOULD_BLOCK,  // nothing right now (EAGAIN), or the buffer is momentarily full
+    WOULD_BLOCK,  // nothing right now (EAGAIN), or the buffer is momentarily
+                  // full
     CLOSED,       // peer hung up or the socket errored -- caller should Close()
   };
   enum class ReadResult : std::uint8_t {
